@@ -28,13 +28,24 @@ read-only `apsw.Connection`.
 - [x] Offline demo (DONE 2026-07-23): `examples/offline_demo.py` — 134 MB
       database, cold point lookup 4 pages (16 KB), warm 0, FTS5 hit
       10 pages; `swarmlite query --stats` prints the same counters.
-- [ ] Live demo: publish a sample DB by hand (swarmfs), query it via
-      `swarmlite.connect` against a live Bee node (opt-in env vars).
+- [x] Live demo (DONE 2026-07-23, Bee 2.8.1 light node / Swarm Desktop,
+      Gnosis mainnet): published the 134.5 MB demo DB via swarmfs (59 s,
+      depth-19 batch), then live queries: point lookup **5 pages / 20 KB
+      in 0.02 s** (warm: 0 reads), indexed top-N 9 pages, FTS5 12 pages.
 
-**Exit criterion:** on a large synthetic DB served through the VFS, a
-primary-key point lookup fetches ≤ 6 pages cold, ≤ 2 warm — **met offline**
-(134 MB: 4 cold / 0 warm, asserted by `test_point_lookup_read_budget`);
-live-node demonstration still pending.
+**Exit criterion: MET** — point lookup ≤ 6 pages cold, ≤ 2 warm, asserted
+offline by `test_point_lookup_read_budget` (4 cold / 0 warm on 134 MB) and
+demonstrated live (5 cold / 0 warm).
+
+Operational learnings from the live run:
+
+- Use `block_size=65536` for interactive/point-lookup use (now the CLI
+  default). The fsspec default block is large, so every VFS miss pulled
+  ~1 MB through `/bytes` — slow, and misleading next to the page counters.
+- Right after an upload, a large range read was truncated mid-stream by
+  the node (`ContentLengthError`, 512 KiB of ~1 MiB); retry succeeded and
+  small blocks avoid it. Worth reproducing and filing against swarmfs
+  (retry-on-truncation) and/or Bee.
 
 ## v1 — publisher
 

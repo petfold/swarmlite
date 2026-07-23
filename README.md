@@ -7,12 +7,20 @@ and run `SELECT` against it — from Python or (later) the browser — fetching
 only the B-tree pages the query plan touches, each page verifiable against
 the file's content address. No database server anywhere.
 
-**Status: v0 — the read path works** (offline-tested; live-node demo
-pending). `swarmlite.connect()` serves lazy read-only SQL over any fsspec
-URL; try `python examples/offline_demo.py` — no Bee node needed: a cold
-point lookup on a 134 MB database fetches 4 pages (16 KB). The publisher
-CLI (v1) is not implemented yet; publish by hand with swarmfs meanwhile.
-Design: [docs/DESIGN.md](docs/DESIGN.md); plan: [docs/roadmap.md](docs/roadmap.md).
+**Status: v0 — the read path works, demonstrated live.** On a Bee 2.8.1
+light node (Gnosis mainnet), a cold point lookup on a published 134.5 MB
+database fetched **5 pages (20 KB) in 0.02 s**; warm queries fetch nothing.
+Try it without a node: `python examples/offline_demo.py`. To go live:
+publish with swarmfs (see below), then
+
+```bash
+swarmlite query "bzz://<root>/demo.db" \
+    "SELECT title FROM posts WHERE id = 73123" --stats
+```
+
+The publisher CLI (v1) is not implemented yet; publish by hand with
+swarmfs meanwhile. Design: [docs/DESIGN.md](docs/DESIGN.md);
+plan: [docs/roadmap.md](docs/roadmap.md).
 
 ## The idea in one paragraph
 

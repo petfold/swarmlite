@@ -32,6 +32,11 @@ def main(argv: list[str] | None = None) -> int:
     p_q.add_argument("sql")
     p_q.add_argument("--api-url", dest="api_url")
     p_q.add_argument(
+        "--block-size", dest="block_size", type=int, default=65536,
+        help="transport readahead block in bytes (default 64 KiB; "
+        "larger helps scans, smaller helps point lookups)",
+    )
+    p_q.add_argument(
         "--stats", action="store_true",
         help="print pages/bytes fetched vs. file size to stderr",
     )
@@ -52,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
         from .vfs import connect
 
         opts = {"api_url": args.api_url} if args.api_url else {}
+        if args.block_size:
+            opts["block_size"] = args.block_size
         con = connect(args.url, **opts)
         for row in con.execute(args.sql):
             print("\t".join(str(v) for v in row))
