@@ -72,7 +72,7 @@ pip install -e ../swarmfs -e ".[test]"
 Verify:
 
 ```bash
-pytest                          # 18 tests, no node needed
+pytest                          # 27 tests, no node needed
 python examples/offline_demo.py # the demo of §4, offline
 swarmlite --help
 ```

@@ -80,11 +80,12 @@ the feed URL.
 
 ## Phases (details in docs/roadmap.md)
 
-- **v0** — Python read-only VFS over swarmfs; `connect()`; offline tests;
-  demo against a real published DB.
-- **v1** — `swarmlite publish` CLI + library function; feed advance;
-  round-trip integration test.
-- **v2** — JS page-fetching VFS for SQLite-WASM (browser), chunk
+- **v0 (DONE 2026-07-23)** — Python read-only VFS over swarmfs;
+  `connect()`; offline tests; demonstrated against a real published DB.
+- **v1 (DONE 2026-07-23)** — `swarmlite publish` CLI + library function;
+  feed publishing via bzzf:// (one upload = feed advance + pin);
+  round-trip integration tests passed live.
+- **v2 (next)** — JS page-fetching VFS for SQLite-WASM (browser), chunk
   verification included; lives under `js/` when started.
 - Later — readahead tuning, hot-page bundling, DuckDB cookbook doc,
   FTS5 demo site.
