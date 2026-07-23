@@ -31,6 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     p_q.add_argument("url", help="bzz://<ref>/file.db or bzzf://<owner>/<topic>")
     p_q.add_argument("sql")
     p_q.add_argument("--api-url", dest="api_url")
+    p_q.add_argument(
+        "--stats", action="store_true",
+        help="print pages/bytes fetched vs. file size to stderr",
+    )
 
     args = parser.parse_args(argv)
 
@@ -47,9 +51,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "query":
         from .vfs import connect
 
-        con = connect(args.url, api_url=args.api_url)
+        opts = {"api_url": args.api_url} if args.api_url else {}
+        con = connect(args.url, **opts)
         for row in con.execute(args.sql):
             print("\t".join(str(v) for v in row))
+        if args.stats:
+            s = con.swarmlite_file.stats()
+            print(
+                f"fetched {s['pages_fetched']} pages "
+                f"({s['bytes_fetched'] / 1024:.0f} KB) "
+                f"in {s['read_count']} reads, "
+                f"of a {s['file_size'] / 2**20:.1f} MB file",
+                file=sys.stderr,
+            )
         return 0
 
     parser.error("unknown command")

@@ -7,9 +7,12 @@ and run `SELECT` against it — from Python or (later) the browser — fetching
 only the B-tree pages the query plan touches, each page verifiable against
 the file's content address. No database server anywhere.
 
-**Status: pre-alpha scaffold.** The design is settled (see
-[docs/DESIGN.md](docs/DESIGN.md)); implementation is starting. Nothing below
-works yet unless marked otherwise.
+**Status: v0 — the read path works** (offline-tested; live-node demo
+pending). `swarmlite.connect()` serves lazy read-only SQL over any fsspec
+URL; try `python examples/offline_demo.py` — no Bee node needed: a cold
+point lookup on a 134 MB database fetches 4 pages (16 KB). The publisher
+CLI (v1) is not implemented yet; publish by hand with swarmfs meanwhile.
+Design: [docs/DESIGN.md](docs/DESIGN.md); plan: [docs/roadmap.md](docs/roadmap.md).
 
 ## The idea in one paragraph
 

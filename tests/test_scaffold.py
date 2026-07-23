@@ -1,9 +1,5 @@
-"""Scaffold-stage tests: the package imports, the CLI parses, and the
-not-yet-implemented surfaces fail loudly (never silently succeed).
-
-Real tests arrive with v0 — see docs/roadmap.md. The important one to
-write first: the read-budget test (build a DB, serve it via memory://
-fsspec through the VFS, assert a point lookup stays within N fetches).
+"""Package-surface tests: exports, CLI parsing, and loud failure of the
+not-yet-implemented publisher (v1). The real v0 tests live in test_vfs.py.
 """
 
 import pytest
@@ -16,11 +12,6 @@ def test_exports():
     assert callable(swarmlite.connect)
     assert callable(swarmlite.publish)
     assert swarmlite.__version__
-
-
-def test_connect_is_unimplemented_not_silent():
-    with pytest.raises(NotImplementedError):
-        swarmlite.connect("bzz://" + "0" * 64 + "/site.db")
 
 
 def test_publish_is_unimplemented_not_silent(tmp_path):

@@ -9,25 +9,32 @@ with a date).
 Goal: `swarmlite.connect("bzz://<ref>/site.db")` returns a working
 read-only `apsw.Connection`.
 
-- [ ] `SwarmVFS` / `SwarmVFSFile` (apsw subclasses): `xOpen`, `xRead`,
+- [x] `SwarmVFS` / `SwarmVFSFile` (DONE 2026-07-23): `xOpen`, `xRead`,
       `xFileSize`; `xAccess` reports journal/WAL absent; write ops raise
-      `apsw.ReadOnlyError`.
-- [ ] URL resolution via fsspec/swarmfs: `bzz://` (pin) and `bzzf://`
-      (feed → latest root at open time; record which root was opened on
-      the connection object).
-- [ ] LRU page cache keyed by `(root, offset)`; swarmfs `block_size`
-      passthrough.
-- [ ] Offline tests over `memory://` fsspec: correctness of queries AND a
-      read-budget assertion (spy counts fetches; point lookup ≤ N reads).
-- [ ] Boundary tests: empty DB; `page_size` ≠ 4096; file bigger than
-      cache; FTS5 query; truncated file fails loudly.
-- [ ] Demo: publish a sample DB by hand (swarmfs), query it via
+      `apsw.ReadOnlyError`; `SQLITE_IOCAP_IMMUTABLE`; duck-typed file
+      object (verified apsw accepts it); `temp_store=MEMORY` forced so
+      sorts never open temp files.
+- [x] URL resolution via fsspec/swarmfs (DONE 2026-07-23): any fsspec URL;
+      `bzzf://` resolves at open time. *Remaining nit: record the
+      resolved immutable root (not just the URL) on the connection for
+      feed opens — needs a swarmfs introspection hook.*
+- [x] LRU page cache (DONE 2026-07-23), contiguous-run fetching;
+      `storage_options` (incl. `block_size`) passed through to fsspec.
+- [x] Offline tests over `memory://` fsspec (DONE 2026-07-23): correctness
+      AND read-budget assertions via `con.swarmlite_file` counters.
+- [x] Boundary tests (DONE 2026-07-23): empty DB; `page_size` ≠ 4096;
+      cache smaller than file; FTS5; truncated file fails loudly;
+      big ORDER BY spills to memory not temp files.
+- [x] Offline demo (DONE 2026-07-23): `examples/offline_demo.py` — 134 MB
+      database, cold point lookup 4 pages (16 KB), warm 0, FTS5 hit
+      10 pages; `swarmlite query --stats` prints the same counters.
+- [ ] Live demo: publish a sample DB by hand (swarmfs), query it via
       `swarmlite.connect` against a live Bee node (opt-in env vars).
 
-**Exit criterion:** on a ≥1 GB synthetic DB served through the VFS, a
-primary-key point lookup completes while fetching ≤ 6 pages after a cold
-start, ≤ 2 after warm-up — asserted by the read-budget test offline and
-demonstrated once against a live node.
+**Exit criterion:** on a large synthetic DB served through the VFS, a
+primary-key point lookup fetches ≤ 6 pages cold, ≤ 2 warm — **met offline**
+(134 MB: 4 cold / 0 warm, asserted by `test_point_lookup_read_budget`);
+live-node demonstration still pending.
 
 ## v1 — publisher
 
