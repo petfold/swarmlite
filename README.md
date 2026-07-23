@@ -2,105 +2,116 @@
 
 **Verifiable serverless SQLite hosting on Ethereum Swarm.**
 
-Publish an ordinary SQLite database file to [Swarm](https://docs.ethswarm.org/)
-and run `SELECT` against it — from Python or (later) the browser — fetching
-only the B-tree pages the query plan touches, each page verifiable against
-the file's content address. No database server anywhere.
+Publish an ordinary SQLite file to [Swarm](https://docs.ethswarm.org/) and
+run `SELECT` against it — fetching only the B-tree pages the query plan
+touches, each one verifiable against the file's 32-byte content address.
+No database server anywhere.
 
-**Status: v0 — the read path works, demonstrated live.** On a Bee 2.8.1
-light node (Gnosis mainnet), a cold point lookup on a published 134.5 MB
-database fetched **5 pages (20 KB) in 0.02 s**; warm queries fetch nothing.
-Try it without a node: `python examples/offline_demo.py`. To go live:
-publish with swarmfs (see below), then
+Measured live (Bee 2.8.1 light node, Gnosis mainnet, 134.5 MB database):
 
 ```bash
-swarmlite query "bzz://<root>/demo.db" \
-    "SELECT title FROM posts WHERE id = 73123" --stats
+$ swarmlite query "bzz://<root>/demo.db" \
+      "SELECT title FROM posts WHERE id = 73123" --stats
+Post 73123: on sqlite
+fetched 5 pages (20 KB) in 5 reads, of a 134.5 MB file    # 0.02 s
 ```
 
-The publisher CLI (v1) is not implemented yet; publish by hand with
-swarmfs meanwhile. Design: [docs/DESIGN.md](docs/DESIGN.md);
-plan: [docs/roadmap.md](docs/roadmap.md).
+Warm repeats fetch nothing; an FTS5 full-text search fetched 12 pages.
 
-## The idea in one paragraph
+**Status: v0.** The read path (`swarmlite.connect`, `swarmlite query`) is
+implemented, tested (18 tests incl. read-budget assertions), and
+demonstrated live. The publisher CLI (v1) and the browser/WASM reader (v2)
+are next — publish by hand with swarmfs meanwhile.
+**[docs/USER_GUIDE.md](docs/USER_GUIDE.md) has the complete setup and
+worked examples**; design in [docs/DESIGN.md](docs/DESIGN.md), plan in
+[docs/roadmap.md](docs/roadmap.md).
+
+## How it works
 
 SQLite never touches storage directly — all I/O goes through its **VFS**
-interface, and a *read-only* VFS needs just three methods (`xOpen`, `xRead`,
-`xFileSize`). SQLite's default page size is 4 KB; so is a Swarm chunk. So a
-thin VFS that maps `xRead(offset, n)` onto ranged reads of a `bzz://`
-reference (which [swarmfs](https://github.com/petfold/swarmfs) already
-provides) gives you lazy `SELECT` over a multi-gigabyte remote database at a
-cost of a handful of 4 KB page fetches per query — Merkle-verified, immutable,
-permanent. Precedent: phiresky's `sql.js-httpvfs` did this over plain HTTP
-range requests; Swarm adds verification and permanence.
+interface, and a read-only VFS needs three methods. SQLite's default page
+(4 KB) equals a Swarm chunk; a query walks a B-tree, so even on a
+multi-GB file a point lookup touches ~4 pages. swarmlite maps
+`xRead(offset, n)` onto [swarmfs](https://github.com/petfold/swarmfs)
+range reads, with an LRU page cache in front:
 
-Writes stay where SQL writes belong: the **publisher** works on a local file
-with full SQL and real transactions, then ships an immutable snapshot and
-advances a feed. Never a SQL `UPDATE` across the network.
-
-## Quick start (once the prototype exists)
-
-```bash
-# until swarmfs is on PyPI, install it from a local checkout first:
-pip install -e ../swarmfs -e ".[test]"
-pytest                       # offline unit tests (no Bee node needed)
+```
+application          plain SELECT
+SQLite engine        unmodified (apsw)
+bzz-VFS shim         xRead(off, n) -> ranged fetch     <- this package
+swarmfs              f.seek(off); f.read(n)
+Bee                  /bytes, HTTP range reads
 ```
 
-Read path:
+Writes stay where SQL writes belong: the **publisher** works on a local
+file — full SQL, real transactions — then ships an immutable snapshot and
+optionally advances a feed. Every publish is a permanent snapshot; the
+old roots keep working. (Precedent for the read path: phiresky's
+`sql.js-httpvfs` over plain HTTP ranges; Swarm adds verification and
+permanence.)
+
+## Quick start
+
+```bash
+git clone https://github.com/petfold/swarmlite
+cd swarmlite
+python3 -m venv .venv && source .venv/bin/activate
+git clone https://github.com/petfold/swarmfs ../swarmfs   # until it's on PyPI
+pip install -e ../swarmfs -e ".[test]"
+
+pytest                           # 18 tests, no node needed
+python examples/offline_demo.py  # the demo, offline — no node, no funds
+```
+
+The offline demo runs the identical code path through an in-memory
+filesystem: a cold point lookup on a 134 MB database fetches 4 pages.
+
+### Going live
+
+With a Bee node (e.g. [Swarm Desktop](https://desktop.ethswarm.org/)) and
+a usable postage stamp — see the
+[User Guide](docs/USER_GUIDE.md) for stamp buying and sizing:
+
+```python
+import fsspec
+
+fs = fsspec.filesystem("bzz", stamp="<batchID>")
+with fs.transaction:
+    fs.put_file("site.db", "bzz://new/site.db")   # VACUUMed, page_size=4096
+root = fs.latest("new")
+```
 
 ```python
 import swarmlite
 
-# immutable pin: a specific published version
-con = swarmlite.connect("bzz://<64-hex-reference>/site.db")
-
-# or follow a feed: always the latest published version
-con = swarmlite.connect("bzzf://<owner>/site/root")
-
-for row in con.execute(
-        "SELECT title FROM posts ORDER BY ts DESC LIMIT 10"):
-    print(row)
+con = swarmlite.connect(f"bzz://{root}/site.db")
+rows = list(con.execute("SELECT ... "))
+print(con.swarmlite_file.stats())   # pages/bytes fetched vs. file size
 ```
 
-Publish path:
-
-```bash
-swarmlite publish site.db --feed site/root
-# VACUUM -> upload via swarmfs transaction -> feed update
-```
-
-## Architecture
-
-```
-application          plain SELECT
-SQLite engine        unmodified (via apsw)
-bzz-VFS shim         xRead(off, n) -> ranged fetch     <- this package
-swarmfs              f.seek(off); f.read(n)            exists today
-Bee                  /bytes, HTTP range reads
-```
-
-See [docs/DESIGN.md](docs/DESIGN.md) for the full design (read path, page
-cache, publisher checklist, browser/WASM phase, web-app patterns, caveats)
-and [docs/roadmap.md](docs/roadmap.md) for the build order.
+URL forms: `bzz://<root>/site.db` pins an immutable version;
+`bzzf://<owner>/<topic>` follows a feed to the latest. `file://` and
+`memory://` work too (tests, local use). Connections are strictly
+read-only — DML raises `apsw.ReadOnlyError`.
 
 ## What this is not
 
 - Not a SQL engine over Swarm-native indexes — that is
   [recordstore](https://github.com/petfold/recordstore)/POT territory.
-- Not OLTP. Feeds are eventually consistent and last-write-wins; readers
-  wanting reproducibility pin a root instead of following the feed.
-- Not a write path through the VFS. Read-only by design; the publisher
-  pattern *is* the write API.
+- Not OLTP. Feeds are eventually consistent; pin a root when you need
+  reproducibility.
+- Not a write path through the VFS. The publisher pattern *is* the write
+  API.
 
 ## Relatives
 
 - [swarmfs](https://github.com/petfold/swarmfs) — the fsspec backend this
-  builds on (range reads, transactions, feeds).
+  builds on (range reads, transactional writes, feeds).
 - [recordstore](https://github.com/petfold/recordstore) — versioned
-  key→record store; can be the system of record that `site.db` is
-  materialized *from* (the datacat pattern).
-- DuckDB-WASM + Parquet over range requests — the analytics flavour of the
-  same trick; works today via swarmfs with no new code.
+  key→record store; the natural system of record that a published
+  `site.db` is materialized from.
+- DuckDB-WASM + Parquet over range requests — the analytics flavour of
+  the same trick; works today via swarmfs with no new code.
 
 ## License
 
