@@ -1,41 +1,175 @@
 """The publisher: the only write path (docs/DESIGN.md section 3).
 
-Checklist encoded here (keep in sync with CLAUDE.md):
+The checklist, encoded in :func:`prepare` (keep in sync with CLAUDE.md):
 
-    PRAGMA page_size=4096;        -- align pages to chunks (rewrite if not)
-    PRAGMA journal_mode=DELETE;   -- no WAL sidecar in the artifact
-    -- caller creates indexes / runs ANALYZE (warn if obviously missing)
-    VACUUM;                       -- contiguous layout -> readahead works
-    PRAGMA integrity_check;
-    upload via fs.transaction     -- swarmfs; all-or-nothing
-    optionally advance bzzf:// feed to the new root
+    copy the database (never mutate the caller's file; backup API, so a
+      live WAL source is checkpointed correctly)
+    PRAGMA journal_mode=DELETE   -- no WAL sidecar in the artifact
+    PRAGMA page_size=4096        -- align pages to Swarm chunks
+    warn about large tables with no index (caller's job to fix)
+    ANALYZE                      -- give the remote query planner statistics
+    VACUUM                       -- contiguous layout; applies the page size
+    PRAGMA integrity_check       -- must be 'ok'
+
+then :func:`publish` uploads inside a swarmfs transaction:
+
+    without a feed: bzz://new/<name>  ->  immutable pin root
+    with a feed:    bzzf://<owner>/<topic>/<name>  ->  the same commit
+                    machinery plus a signed feed update; one upload yields
+                    BOTH the stable feed URL and the immutable pin root.
 
 Every publish is a permanent snapshot; the feed names "latest".
-
-Status: v1 skeleton. Signature is final; body is not written.
 """
 
 from __future__ import annotations
 
+import os
+import shutil
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+import fsspec
+
+PAGE_SIZE = 4096
+LARGE_TABLE_ROWS = 5000  # tables at/above this without an index draw a warning
+SIGNER_ENV = "SWARMLITE_SIGNER"
+
+
+class PublishError(RuntimeError):
+    """The database failed a check that must not be papered over."""
+
+
+def prepare(db_path: str | os.PathLike, out_path: str | os.PathLike) -> list[str]:
+    """Produce a publish-ready copy of ``db_path`` at ``out_path``.
+
+    Runs the publisher's checklist on the copy; the source is never
+    touched. Returns human-readable warnings for conditions that were
+    fixed silently (page size, WAL) or that the caller should fix
+    (missing indexes). Raises :class:`PublishError` if the database fails
+    ``integrity_check``.
+    """
+    db_path, out_path = Path(db_path), Path(out_path)
+    if not db_path.exists():
+        raise FileNotFoundError(db_path)
+    warnings: list[str] = []
+
+    # backup-API copy: consistent even if the source is a live WAL db
+    src = sqlite3.connect(db_path)
+    dst = sqlite3.connect(out_path)
+    try:
+        src.backup(dst)
+    finally:
+        src.close()
+
+    try:
+        (mode,) = dst.execute("PRAGMA journal_mode").fetchone()
+        if mode.lower() != "delete":
+            dst.execute("PRAGMA journal_mode=DELETE")
+            if mode.lower() == "wal":
+                warnings.append(
+                    "journal_mode was WAL; switched to DELETE for the artifact"
+                )
+
+        (page_size,) = dst.execute("PRAGMA page_size").fetchone()
+        if page_size != PAGE_SIZE:
+            dst.execute(f"PRAGMA page_size={PAGE_SIZE}")
+            warnings.append(
+                f"page_size was {page_size}; rewriting to {PAGE_SIZE} "
+                f"(one page = one Swarm chunk)"
+            )
+
+        for (table,) in dst.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%' AND sql LIKE 'CREATE TABLE%'"
+        ).fetchall():
+            (n,) = dst.execute(f'SELECT count(*) FROM "{table}"').fetchone()
+            (idx,) = dst.execute(
+                "SELECT count(*) FROM sqlite_master WHERE type='index' "
+                "AND tbl_name=?",
+                (table,),
+            ).fetchone()
+            if n >= LARGE_TABLE_ROWS and idx == 0:
+                warnings.append(
+                    f"table {table!r} has {n} rows and no index — remote "
+                    f"queries filtering on non-rowid columns will scan the "
+                    f"whole file (INTEGER PRIMARY KEY lookups are still fine)"
+                )
+
+        dst.execute("ANALYZE")
+        dst.commit()
+        dst.execute("VACUUM")  # applies the page size, defragments
+
+        result = [r[0] for r in dst.execute("PRAGMA integrity_check").fetchall()]
+        if result != ["ok"]:
+            raise PublishError(
+                f"integrity_check failed for {db_path}: {result[:5]}"
+            )
+    finally:
+        dst.close()
+    return warnings
+
 
 def publish(
-    db_path: str,
+    db_path: str | os.PathLike,
     *,
     name: str = "site.db",
     feed: str | None = None,
     stamp: str = "auto",
     signer: str | None = None,
     api_url: str | None = None,
+    quiet: bool = False,
 ) -> str:
     """Publish a local SQLite file to Swarm; return the immutable root.
 
-    Runs the pragma/VACUUM/integrity checklist on a *copy* of ``db_path``
-    (never mutate the caller's working database), uploads it inside a
-    swarmfs transaction, and — if ``feed`` is given (``"<topic>"`` with a
-    ``signer`` key) — advances the feed to the new root.
+    Runs :func:`prepare` on a temporary copy, then uploads it inside a
+    swarmfs transaction. Without ``feed``, the result is an immutable pin
+    (``bzz://<root>/<name>``). With ``feed`` (a topic string), the upload
+    goes through the ``bzzf://`` filesystem instead: the same single
+    upload also advances the owner's feed, so readers get a stable URL
+    (``bzzf://<owner>/<feed>/<name>``) *and* the pin stays valid. Feed
+    publishing needs ``signer`` (the owner's private key hex; falls back
+    to ``$SWARMLITE_SIGNER``) and the swarmfs ``feeds`` extra.
 
-    Prints (and returns) the pin URL; prints the feed URL when advanced.
-    Warnings, not failures, for fixable issues it corrected (page size,
-    WAL mode, missing ANALYZE).
+    Warnings from the checklist go to stderr unless ``quiet``.
     """
-    raise NotImplementedError("v1: see docs/roadmap.md")
+    fs_opts: dict = {"stamp": stamp}
+    if api_url:
+        fs_opts["api_url"] = api_url
+
+    workdir = tempfile.mkdtemp(prefix="swarmlite-publish-")
+    try:
+        prepared = os.path.join(workdir, name)
+        for w in prepare(db_path, prepared):
+            if not quiet:
+                print(f"warning: {w}", file=sys.stderr)
+
+        if feed:
+            signer = signer or os.environ.get(SIGNER_ENV)
+            if not signer:
+                raise PublishError(
+                    f"feed publishing needs a signer key: pass signer=... "
+                    f"or set ${SIGNER_ENV}"
+                )
+            from swarmfs.feeds import FeedSigner  # needs swarmfs[feeds]
+
+            owner = FeedSigner(signer).owner_hex
+            fs = fsspec.filesystem("bzzf", signer=signer, **fs_opts)
+            feed_base = f"bzzf://{owner}/{feed}"
+            with fs.transaction:
+                fs.put_file(str(prepared), f"{feed_base}/{name}")
+            root = fs.latest(feed_base)
+            if not quiet:
+                print(f"pin:  bzz://{root}/{name}", file=sys.stderr)
+                print(f"feed: {feed_base}/{name}", file=sys.stderr)
+        else:
+            fs = fsspec.filesystem("bzz", **fs_opts)
+            with fs.transaction:
+                fs.put_file(str(prepared), f"bzz://new/{name}")
+            root = fs.latest("new")
+            if not quiet:
+                print(f"pin:  bzz://{root}/{name}", file=sys.stderr)
+        return root
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)

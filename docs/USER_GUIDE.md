@@ -155,9 +155,43 @@ so `memory://` in tests and `bzz://` in production exercise the same code.
 
 ## 5. Publishing a database
 
-swarmlite's own `publish` command is not implemented yet (roadmap v1), so
-publish with swarmfs directly — it's a few lines. First prepare the file
-(the **publisher's checklist**):
+One command:
+
+```bash
+swarmlite publish site.db --stamp <batchID>
+# warning: journal_mode was WAL; switched to DELETE for the artifact
+# warning: table 'log' has 80000 rows and no index — remote queries ...
+# pin:  bzz://<root>/site.db
+```
+
+It works on a **copy** (your file is never touched; a live WAL database
+is checkpointed correctly via the backup API) and runs the publisher's
+checklist: `journal_mode=DELETE`, `page_size=4096`, `ANALYZE`, `VACUUM`,
+`integrity_check`, then uploads inside a swarmfs transaction. Fixable
+issues become warnings; a failed integrity check aborts.
+
+For a **stable, updatable URL**, publish into a signed feed — a single
+upload advances the feed *and* yields the immutable pin:
+
+```bash
+swarmlite publish site.db --feed mysite --signer <private key hex>
+# pin:  bzz://<root>/site.db
+# feed: bzzf://<owner>/mysite/site.db
+```
+
+The signer key can also come from `$SWARMLITE_SIGNER`; the owner address
+is derived from it. Requires the feeds extra
+(`pip install -e "../swarmfs[feeds]"`). Note: a *freshly published* feed
+takes a few minutes to become resolvable on mainnet (§8); the pin URL
+works immediately. Republishing to the same feed updates what readers
+see; every previous pin keeps working (free snapshots).
+
+Same thing from Python: `swarmlite.publish("site.db", feed="mysite",
+signer=key, stamp="<batchID>") -> root`.
+
+### What the checklist does, and why (manual version)
+
+If you prefer to prepare the file yourself:
 
 ```python
 import sqlite3
@@ -175,32 +209,11 @@ con.close()
 Why it matters: `page_size=4096` makes one page = one chunk; indexes are
 what keep remote queries to a handful of pages (an unindexed scan reads
 the whole file — over the network); `VACUUM` defragments so readahead is
-effective.
+effective. `swarmlite publish` does all of this for you on a copy.
 
-Then upload:
-
-```python
-import fsspec
-
-fs = fsspec.filesystem("bzz", stamp="<batchID>")   # or stamp="auto"
-with fs.transaction:                               # all-or-nothing
-    fs.put_file("site.db", "bzz://new/site.db")
-root = fs.latest("new")
-print(f"published: bzz://{root}/site.db")
-```
-
-Our 134.5 MB demo file uploaded in **59 s** on a light node. The root is
-permanent and immutable — republish after changes and you get a *new*
-root; old ones keep working until their stamp expires (every version is a
-free snapshot).
-
-To give readers a stable "latest" URL, advance a feed after each publish
-(needs `pip install -e "../swarmfs[feeds]"` and a signer key):
-
-```python
-ffs = fsspec.filesystem("bzzf", stamp="<batchID>", signer="<private key hex>")
-ffs.pipe_file(f"bzzf://{owner}/site/root", root.encode())
-```
+Timing reference: our 134.5 MB demo file uploaded in **59 s** on a light
+node. The root is permanent and immutable — republish after changes and
+you get a *new* root; old ones keep working until their stamp expires.
 
 Try the full flow with the demo data: `examples/offline_demo.py` exposes
 `build()`, so
@@ -211,7 +224,7 @@ from offline_demo import build
 open("demo.db", "wb").write(build())
 ```
 
-then upload `demo.db` as above.
+then `swarmlite publish demo.db --name demo.db --stamp <batchID>`.
 
 ## 6. Querying a published database
 
@@ -254,9 +267,11 @@ URL forms:
 
 - `bzz://<root>/site.db` — an immutable, pinned version. Reproducible
   forever (while stamped).
-- `bzzf://<owner>/<topic>` — a feed, resolved to the latest published
-  version at open time. *(Feed reads go through swarmfs and should work,
-  but haven't been exercised live yet — pin roots for anything critical.)*
+- `bzzf://<owner>/<topic>/<name>` — a feed, resolved to the latest
+  published version at open time (verified live: a feed-published test DB
+  answered a point lookup in 3 page fetches). Freshly published feeds
+  take minutes to become resolvable (§8); pin roots when you need
+  reproducibility.
 - `file://…`, `memory://…` — local/testing, same code path.
 
 ### Tuning: `block_size` and the page cache
@@ -299,6 +314,11 @@ may transfer more (whole blocks). If the numbers matter, measure both.
   truncated by the node right after upload. Retry, and/or use the default
   64 KiB `block_size` (large blocks were the trigger). If reproducible,
   please file an issue.
+- **Feed URL 404s (`FileNotFoundError`) right after publishing** — the
+  signed feed update takes minutes to push-sync on mainnet before
+  lookups find it; the pin URL printed next to it works immediately.
+  Seen live: resolvable after ~2–3 minutes. Republishing to an
+  *existing* feed doesn't have this gap for readers already following it.
 - **Root worked yesterday, 404/timeouts today** — the stamp likely
   expired (`batchTTL` in `/stamps`). Republish, or top up before expiry.
 - **`ValueError: swarmlite.connect() needs a URL`** — plain paths are
@@ -313,10 +333,11 @@ may transfer more (whole blocks). If the numbers matter, measure both.
 
 ## 9. Limitations (current, honest)
 
-- Read-only by design; publisher CLI (v1) and the browser/WASM reader
-  (v2) are not built yet — see `docs/roadmap.md`.
-- Feed (`bzzf://`) reads are untested live; `swarmlite_root` records the
-  URL, not yet the resolved root, for feed opens.
+- Read-only by design; the browser/WASM reader (v2) is not built yet —
+  see `docs/roadmap.md`.
+- Fresh feeds take minutes to become resolvable (§8);
+  `con.swarmlite_url` records the URL, not yet the resolved root, for
+  feed opens.
 - Concurrent `connect()` calls to the *same* URL are unsupported
   (different URLs are fine).
 - Latency: each cold miss is a round trip; interactive after warm-up,

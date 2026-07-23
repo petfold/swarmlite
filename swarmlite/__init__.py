@@ -17,6 +17,6 @@ CLAUDE.md and docs/DESIGN.md before changing anything.
 from .vfs import SwarmVFS, connect
 from .publish import publish
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 __all__ = ["connect", "publish", "SwarmVFS", "__version__"]

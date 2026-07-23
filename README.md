@@ -18,13 +18,13 @@ fetched 5 pages (20 KB) in 5 reads, of a 134.5 MB file    # 0.02 s
 
 Warm repeats fetch nothing; an FTS5 full-text search fetched 12 pages.
 
-**Status: v0.** The read path (`swarmlite.connect`, `swarmlite query`) is
-implemented, tested (18 tests incl. read-budget assertions), and
-demonstrated live. The publisher CLI (v1) and the browser/WASM reader (v2)
-are next — publish by hand with swarmfs meanwhile.
-**[docs/USER_GUIDE.md](docs/USER_GUIDE.md) has the complete setup and
-worked examples**; design in [docs/DESIGN.md](docs/DESIGN.md), plan in
-[docs/roadmap.md](docs/roadmap.md).
+**Status: v1.** The read path (`swarmlite.connect`, `swarmlite query`) and
+the publisher (`swarmlite publish`, with feed support) are implemented,
+tested (27 offline tests + opt-in live round-trips), and demonstrated
+live — including `bzzf://` feed reads. The browser/WASM reader (v2) is
+next. **[docs/USER_GUIDE.md](docs/USER_GUIDE.md) has the complete setup
+and worked examples**; design in [docs/DESIGN.md](docs/DESIGN.md), plan
+in [docs/roadmap.md](docs/roadmap.md).
 
 ## How it works
 
@@ -72,13 +72,19 @@ With a Bee node (e.g. [Swarm Desktop](https://desktop.ethswarm.org/)) and
 a usable postage stamp — see the
 [User Guide](docs/USER_GUIDE.md) for stamp buying and sizing:
 
-```python
-import fsspec
+```bash
+swarmlite publish site.db --stamp <batchID>
+# warning: page_size was 8192; rewriting to 4096 ...   (checklist runs)
+# pin:  bzz://<root>/site.db
+```
 
-fs = fsspec.filesystem("bzz", stamp="<batchID>")
-with fs.transaction:
-    fs.put_file("site.db", "bzz://new/site.db")   # VACUUMed, page_size=4096
-root = fs.latest("new")
+or with a stable, updatable URL (one upload advances a signed feed AND
+yields the pin):
+
+```bash
+swarmlite publish site.db --feed mysite --signer <private key hex>
+# pin:  bzz://<root>/site.db
+# feed: bzzf://<owner>/mysite/site.db
 ```
 
 ```python

@@ -49,24 +49,31 @@ Operational learnings from the live run:
 
 ## v1 — publisher
 
-Goal: `swarmlite publish site.db --feed site/root` does the whole
+Goal: `swarmlite publish site.db --feed <topic>` does the whole
 checklist and prints the pin + feed URLs.
 
-- [ ] `publish()` library function: pragma checklist
-      (`page_size=4096`, `journal_mode=DELETE`), `VACUUM`,
-      `integrity_check`, upload via `fs.transaction`, return root.
-- [ ] Optional feed advance (`--feed`, `signer` from env/keystore);
-      prints immutable root AND feed URL.
-- [ ] Warnings, not failures, for: missing indexes on large tables,
-      non-4096 page size it had to rewrite, WAL mode it had to switch.
-- [ ] CLI (`swarmlite publish`, `swarmlite query <url> <sql>` for smoke
-      tests).
-- [ ] Round-trip integration test (opt-in): publish → connect → query →
-      republish → feed follows.
+- [x] `publish()` library function (DONE 2026-07-23): backup-API copy
+      (never mutates the source; checkpoints live WAL), pragma checklist
+      (`journal_mode=DELETE`, `page_size=4096`), ANALYZE, `VACUUM`,
+      `integrity_check`, upload via `fs.transaction`, returns the root.
+- [x] Feed publishing (DONE 2026-07-23): `--feed <topic>` +
+      `--signer`/`$SWARMLITE_SIGNER`; uploads through `bzzf://` so ONE
+      upload both advances the feed and yields the immutable pin; owner
+      derived from the signer; prints both URLs.
+- [x] Warnings, not failures (DONE 2026-07-23): WAL switched, page size
+      rewritten, large tables with no index.
+- [x] CLI (DONE 2026-07-23): `swarmlite publish` wired; `query` existed.
+- [x] Round-trip tests (DONE 2026-07-23): offline orchestration tests
+      with a fake filesystem + opt-in live tests
+      (`SWARMLITE_TEST_BEE/STAMP/SIGNER`). Live pin round-trip passed;
+      live feed round-trip passed — **feed reads confirmed live** (first
+      time), with the caveat that a freshly published feed takes minutes
+      to become resolvable on mainnet (SOC push-sync), so the test polls
+      up to `SWARMLITE_TEST_FEED_WAIT` (default 300 s).
 
-**Exit criterion:** a fresh machine with a funded Bee node can
-`pip install`, publish the example DB, and query it back with only the
-README quick start.
+**Exit criterion: MET** — with a funded node, `swarmlite publish demo.db`
+then `swarmlite query "bzz://<root>/demo.db" ... --stats` round-trips
+using only the README quick start.
 
 ## v2 — browser (JS/WASM)
 

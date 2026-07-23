@@ -24,6 +24,10 @@ def main(argv: list[str] | None = None) -> int:
     p_pub.add_argument("db_path")
     p_pub.add_argument("--name", default="site.db")
     p_pub.add_argument("--feed", help="feed topic to advance to the new root")
+    p_pub.add_argument(
+        "--signer",
+        help="feed owner's private key hex (default: $SWARMLITE_SIGNER)",
+    )
     p_pub.add_argument("--stamp", default="auto")
     p_pub.add_argument("--api-url", dest="api_url")
 
@@ -48,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
 
         root = publish(
             args.db_path, name=args.name, feed=args.feed,
-            stamp=args.stamp, api_url=args.api_url,
+            signer=args.signer, stamp=args.stamp, api_url=args.api_url,
         )
         print(root)
         return 0
