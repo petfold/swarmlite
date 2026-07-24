@@ -109,3 +109,96 @@ up.
 Want me to start on (1) and (2)? Those two together turn "a Python
 project with a JS demo" into "a JS-first product with Python tooling,"
 which matches where web developers actually are.
+
+---
+
+**Question (Peter):**
+
+> I am not familiar with current website backends, so it's interesting
+> that they use databases for the "read-mostly web (blogs, catalogs,
+> docs, search, dashboards". To me it sounds like those could be static
+> pages but then I don't know much about web servers. What I tought
+> would need more real database functionality are things like booking
+> sites or route planning, where the publishing and the reading seem to
+> me to be less separated. What would our strategy be for those use
+> cases. It is probably best to follow your plan first, I am just
+> curious to look ahead as to where the longer term plan leads.
+
+**Answer (Claude):**
+
+Great instinct on both counts — you've spotted the real seam. Let me
+take the two halves separately.
+
+**Why the read-mostly web uses databases at all.** A static page is a
+*materialized answer to one pre-decided question*. That works when the
+question space is small and known in advance: each blog post is one
+page, so generators like Hugo happily pre-render them all. It breaks
+when the question space is combinatorial: search ("posts containing
+*verifiable*"), catalog filtering (size × color × price × brand),
+sorting, pagination over arbitrary filters. You cannot pre-render every
+possible search result — so the LAMP answer was to keep a server
+running MySQL and compute each answer on demand. WordPress renders even
+a plain blog post from the database for workflow reasons (authoring,
+templates, tags), but the *structural* reason databases sit behind
+catalogs and search is that readers choose the question at read time.
+That's exactly the gap swarmlite fills: it makes the *question space*
+static-hostable. The database is one immutable artifact; the reader
+runs whatever `SELECT` they want, lazily. Our demo is precisely that
+proof — a search box over 42 MB with no server.
+
+**Route planning: surprisingly, it's already ours.** It feels
+interactive, but decompose it: the road network is read-mostly data (a
+publisher updates it daily); the *computation* — shortest path — is
+per-reader and touches a tiny fraction of the graph. That's the
+swarmlite shape exactly. Real routing engines precompute index
+structures (contraction hierarchies) that make queries touch few,
+predictable nodes — a preprocessed graph in SQLite with lazy page reads
+means client-side routing over a static published file. Reading and
+publishing only *seem* less separated; actually the write path (map
+updates) and read path (your route query) are perfectly separated. This
+would make a spectacular flagship demo someday — "route across a
+country against a static file on Swarm."
+
+**Booking is the genuinely hard one, and it's worth being precise
+about why.** The essence of booking is *contention over a scarce
+resource*: two strangers want the last room, and someone must decide
+who was first. That is not a storage problem — it's an
+ordering/consensus problem, and no storage cleverness dissolves it. The
+LAMP web solved it with a MySQL row lock, which worked because one
+company owned the database; the lock *was* the trusted arbiter.
+Decentralization changes who you must trust, not the physics of
+contention. Anyone promising serverless booking without a consensus
+layer has hidden a server somewhere.
+
+So the long-term strategy is a ladder, by how much contention the use
+case actually has:
+
+1. **Reader-computes** (search, routing, analytics, maps, dashboards) —
+   no contention at all; already covered by what we've built. Much more
+   of the "interactive" web lives here than it first appears.
+2. **Single-writer interactivity** (orders to one shop, bookings with
+   *one* hotel, comments on a moderated blog) — the resource owner is
+   inherently a trusted party for their own inventory, so let them be
+   the serializer: intents arrive at a small intake endpoint (or via
+   chain messages), the owner's publisher applies them locally and
+   advances the feed. The feed becomes a signed, append-only booking
+   ledger — `swarmlite snapshots` is literally the audit trail.
+   DESIGN.md §5 already sketches this; what's missing is a cookbook and
+   maybe a tiny reference "intake relay."
+3. **True multi-party contention** — this is where the blockchain earns
+   its place in the stack, and only here: a smart contract arbitrates
+   the scarce slot (first valid transaction wins; ~100 bytes of
+   consensus), while Swarm carries everything heavy — the catalog,
+   descriptions, images, availability projections (megabytes). An
+   indexer watches chain events, materializes them plus the catalog
+   into `site.db`, and republishes — closing the loop back into our
+   read path. That split — *chain for conflict decisions, Swarm for
+   data* — is arguably what "the real web3" architecture means; the
+   chain is the write path of last resort, and 99.99% of the bytes stay
+   with us.
+
+The near-term plan stands unchanged — npm publish, cookbooks, migration
+demos. But when we look up from that, the natural next artifacts are:
+the route-planning demo (flagship for tier 1), the "single-writer shop"
+cookbook with feed-as-ledger (tier 2), and eventually a
+contract-plus-indexer reference for contested booking (tier 3).
