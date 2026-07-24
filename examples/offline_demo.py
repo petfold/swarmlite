@@ -22,8 +22,8 @@ import swarmlite
 ROWS = 100_000
 
 
-def build() -> bytes:
-    print(f"building a demo database ({ROWS:,} posts) ...")
+def build(rows: int = ROWS) -> bytes:
+    print(f"building a demo database ({rows:,} posts) ...")
     with tempfile.TemporaryDirectory() as d:
         path = Path(d) / "demo.db"
         con = sqlite3.connect(path)
@@ -46,14 +46,31 @@ def build() -> bytes:
                     f"Post {i}: on {words[i % len(words)]}",
                     " ".join(words[(i + j) % len(words)] for j in range(60)) * 3,
                 )
-                for i in range(ROWS)
+                for i in range(rows)
             ),
         )
+        # FTS5 index (used by the Python/apsw reader)
         con.execute(
             "CREATE VIRTUAL TABLE posts_ft USING fts5(title, content=posts,"
             " content_rowid=id)"
         )
         con.execute("INSERT INTO posts_ft(posts_ft) VALUES('rebuild')")
+        # keyword inverted index (used by the browser reader: the vendored
+        # wa-sqlite build has no FTS5, and word -> id point lookups are
+        # exactly as lazy-friendly). ts is IN the key so that
+        # "newest 10 posts matching <word>" walks one index range —
+        # without it, ORDER BY ts forces a point lookup into posts for
+        # EVERY match (measured: ~2 300 pages instead of ~15).
+        con.execute(
+            "CREATE TABLE kw(word TEXT, ts INTEGER, id INTEGER,"
+            " PRIMARY KEY(word, ts, id)) WITHOUT ROWID"
+        )
+        con.execute(
+            "INSERT INTO kw SELECT DISTINCT lower(w.value), p.ts, p.id"
+            " FROM posts p, json_each('[\"' || replace(replace(lower("
+            "p.title), ':', ''), ' ', '\",\"') || '\"]') w"
+            " WHERE length(w.value) > 2"
+        )
         con.execute("ANALYZE")
         con.commit()
         con.execute("VACUUM")

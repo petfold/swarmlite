@@ -3,6 +3,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+# vendored artifacts are part of the repo (self-contained demo pages)
+!js/vendor/**/dist/
 .pytest_cache/
 .venv/
 *.db

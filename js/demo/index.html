@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>swarmlite — a database behind a static page</title>
+<style>
+  :root {
+    --ink: #1e375a; --slate: #5a6473; --accent: #f39a1e;
+    --pale: #e2eaf4; --bg: #fbfcfe;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #dbe5f1; --slate: #9aa5b4; --pale: #223146; --bg: #141c28; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; max-width: 44rem; padding: 2rem 1.2rem 4rem;
+    font: 16px/1.55 system-ui, sans-serif; color: var(--ink);
+    background: var(--bg);
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 .2rem; }
+  h1::after { content: ""; display: block; width: 8rem; height: 3px;
+    background: var(--accent); margin-top: .45rem; }
+  .sub { color: var(--slate); margin: 0 0 1.6rem; }
+  #search { width: 100%; padding: .65rem .9rem; font-size: 1.05rem;
+    border: 1.5px solid var(--slate); border-radius: 6px;
+    background: var(--bg); color: var(--ink); }
+  #search:focus { outline: none; border-color: var(--accent); }
+  .hint { color: var(--slate); font-size: .85rem; margin: .4rem 0 1.2rem; }
+  #status { font-size: .9rem; color: var(--slate); min-height: 1.4em;
+    margin: .6rem 0 1rem; }
+  #status b { color: var(--accent); }
+  .post { padding: .55rem .8rem; border-left: 3px solid var(--pale);
+    margin-bottom: .45rem; }
+  .post:hover { border-left-color: var(--accent); }
+  .post .t { font-weight: 600; }
+  .post .m { color: var(--slate); font-size: .85rem; }
+  #err { color: #c0392b; white-space: pre-wrap; }
+  footer { margin-top: 2.5rem; font-size: .8rem; color: var(--slate); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+  <h1>swarmlite</h1>
+  <p class="sub">This page is a static file on Swarm. So is the
+    <span id="dbsize">…</span> SQLite database it queries — lazily,
+    a few 4&nbsp;KB pages per query. There is no server.</p>
+
+  <input id="search" type="search" autocomplete="off"
+         placeholder="search posts… (try: verifiable, trie, stamp)">
+  <p class="hint">keyword search via an indexed word table; latest posts
+    shown otherwise</p>
+  <div id="status">opening database…</div>
+  <div id="results"></div>
+  <div id="err"></div>
+
+  <footer>
+    swarmlite — verifiable serverless SQLite on
+    <a href="https://www.ethswarm.org/">Swarm</a> ·
+    <a href="https://github.com/petfold/swarmlite">github.com/petfold/swarmlite</a>
+  </footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

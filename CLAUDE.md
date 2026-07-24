@@ -85,8 +85,12 @@ the feed URL.
 - **v1 (DONE 2026-07-23)** — `swarmlite publish` CLI + library function;
   feed publishing via bzzf:// (one upload = feed advance + pin);
   round-trip integration tests passed live.
-- **v2 (next)** — JS page-fetching VFS for SQLite-WASM (browser), chunk
-  verification included; lives under `js/` when started.
+- **v2 (DONE 2026-07-24)** — JS page-fetching VFS for SQLite-WASM
+  (browser) under `js/` (vendored wa-sqlite Asyncify build); `resolveFeed`
+  via the gateway's `/feeds` Etag; self-contained demo site (page +
+  reader + wasm + DB under one immutable root) published and measured
+  live. Chunk verification deferred to Later (local light node verifies;
+  client-side BMT is for untrusted gateways).
 - Later — readahead tuning, hot-page bundling, DuckDB cookbook doc,
   FTS5 demo site.
 

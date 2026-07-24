@@ -79,17 +79,48 @@ using only the README quick start.
 
 Goal: the same lazy-page trick inside SQLite-WASM in a browser.
 
-- [ ] `js/` package: page-fetching VFS for SQLite-WASM over gateway range
-      reads; chunk verification included.
-- [ ] Feed resolution in JS (or via a tiny resolver endpoint — decide).
-- [ ] Demo static site: HTML+JS+`site.db` all under one immutable root,
-      FTS5 search box. ("A multi-GB dataset behind a static site.")
+- [x] `js/` package (DONE 2026-07-24): `SwarmVFS` over wa-sqlite's
+      Asyncify build (vendored, 1.0.0 — no COOP/COEP needed), gateway
+      Range reads, LRU page cache, contiguous-run fetching capped at
+      64 KiB per request, retry-with-backoff on truncated ranges, same
+      read counters as the Python VFS. `open(url)` returns
+      `{query, stats, close}`. *Decision: chunk-level BMT verification
+      deferred — against a local light node the node verifies retrieved
+      chunks; client-side verification (for untrusted gateways) moved to
+      Later, keccak256 is already vendored for it.*
+- [x] Feed resolution in JS (DONE 2026-07-24): `resolveFeed(api, owner,
+      topic)` in `js/src/feeds.js` — GET `/feeds/{owner}/{topic}`; Bee
+      (2.8.1, `Swarm-Feed-Resolved-Version: v1`) returns the reference
+      in the **Etag** header (body streams the resolved content —
+      cancelled unread); fallback parses a raw bee-js update payload.
+      Topics hash exactly like swarmfs `topic_bytes` (keccak256 via
+      vendored js-sha3; raw 64-hex passes through). Offline unit tests
+      (`js/test/feed.mjs`, stubbed fetch) + verified live: resolves to
+      the same root swarmfs published. Resolution happens once, before
+      `open()` — a feed can move mid-session, a database must not.
+- [x] Demo static site (DONE 2026-07-24): `js/demo/` — HTML + reader +
+      wasm + 41.9 MB `demo.db` (30 k posts) all under ONE immutable
+      root, published by `js/demo/publish_site.py`. Keyword search via a
+      covering inverted index `kw(word, ts, id)` (the vendored wa-sqlite
+      has no FTS5; `ts` in the key matters — without it, top-N-by-time
+      forced a point lookup per match: ~2 300 pages instead of ~15).
+- [x] Smoke test (DONE 2026-07-24): `js/test/smoke.mjs` asserts
+      correctness AND the read budget, offline (`js/test/serve.mjs`, a
+      Range-capable static server — no Bee node) and live. Live against
+      Bee 2.8.1: cold point lookup **5 reads / 20 KB**, warm 0; whole
+      4-query session 23 pages / 92 KB of a 41.9 MB database.
 
-**Exit criterion:** the demo site loads from a gateway and serves search
-queries with network transfer proportional to pages touched, not DB size.
+**Exit criterion: MET** (measured via the Node smoke test against the
+live gateway; all site assets serve with correct MIME types incl.
+`application/wasm` — final in-browser click-through still to be
+eyeballed). Demo root (2026-07-24):
+`5ac6a781227c7481bbc8da9bc0e9abb87179f8c542c764acdcaa72806d8634da`.
 
 ## Later / opportunistic
 
+- Client-side verification in JS for untrusted gateways: BMT/chunk
+  inclusion per page, SOC signature check in `resolveFeed` (mirror
+  swarmfs `verify_soc`). keccak256 already vendored (js-sha3).
 - Readahead tuning; bundling hot top-level pages into one prefetch.
 - Cookbook doc: DuckDB-WASM + Parquet over swarmfs (works today, zero new
   code) — the analytics flavour.

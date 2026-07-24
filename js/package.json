@@ -1,0 +1,14 @@
+{
+  "name": "@swarmlite/reader",
+  "version": "0.1.0",
+  "description": "Lazy read-only SQLite over Swarm gateway range reads, for browsers (wa-sqlite VFS)",
+  "type": "module",
+  "main": "src/index.js",
+  "license": "BSD-3-Clause",
+  "author": "Peter Foldiak",
+  "scripts": {
+    "test": "node test/feed.mjs",
+    "smoke": "node test/smoke.mjs",
+    "serve": "node test/serve.mjs"
+  }
+}
