@@ -146,13 +146,12 @@ against the 32-byte root in the URL.
       have intermediate chunks with FEWER than 128 data refs (seen
       live: 107 data + 21 parity). The JS walker infers the per-child
       unit from the first child's own span instead of 128^k position
-      math. **swarmfs `join.py` has the same 128-fanout assumption and
-      would fail on such files — port this fix back to swarmfs.**
+      math. swarmfs `join.py` had the same 128-fanout assumption —
+      fix ported back (swarmfs commit `dd7def6`, DONE 2026-07-24,
+      verified live against the redundancy-uploaded demo file).
 
 ## Later / opportunistic
 
-- Port the erasure-coding tree-walk fix (v2.1, last item) back to
-  swarmfs `join.py`, with a redundancy-uploaded live test.
 - Readahead tuning; bundling hot top-level pages into one prefetch.
 - Cookbook doc: DuckDB-WASM + Parquet over swarmfs (works today, zero new
   code) — the analytics flavour.
