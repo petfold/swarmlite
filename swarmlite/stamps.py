@@ -1,36 +1,21 @@
-"""Postage-stamp purchase helper: size a batch for a file, price it from
-the chain state, buy it through the node's owner API, wait until usable.
+"""CLI-side stamp purchase flow.
 
-Buying spends real xBZZ from the node's wallet, so nothing is implicit:
-the CLI computes the plan, shows the exact cost, and requires
-confirmation (or ``--yes``). Node-owner endpoints only — ``POST
-/stamps`` works on your own node, never on a public gateway.
-
-Pricing (Gnosis): a batch of ``amount`` per chunk lasts about
-``amount / currentPrice`` blocks of 5 s; the node refuses batches below
-``minimumValidityBlocks`` (24 h at the time of writing), so the plan
-clamps to that. Cost in xBZZ is ``amount * 2**depth / 10**16``.
+The mechanics live in swarmfs, next to the rest of the stamp story
+(listing, validation, auto-selection): ``StampManager.plan`` sizes and
+prices a batch (bucket-overflow-aware depth tiers, chain-minimum
+clamping), ``StampManager.buy`` purchases and polls until usable
+without ever losing a bought batch id. This module keeps only what is
+policy/UX: TTL parsing and the sync bridge the CLI calls. Deciding to
+spend the wallet's xBZZ — and asking the human first — happens in
+``cli._buy_stamp``.
 """
 
 from __future__ import annotations
 
-import json
-import math
-import time
-import urllib.error
-import urllib.request
-from dataclasses import dataclass
+import fsspec
+from fsspec.asyn import sync
 
-BLOCK_SECS = 5  # Gnosis block time
-PLUR_PER_BZZ = 10**16
-
-# file size -> batch depth. Theoretical capacity is 2**depth * 4 KB,
-# but an immutable batch fails as soon as any SINGLE bucket (of 65536)
-# fills — measured live: one 42 MB upload filled a depth-18 batch
-# (4 slots per bucket). These tiers keep the balls-into-buckets
-# overflow risk under ~5% per upload; keep in sync with the table in
-# docs/USER_GUIDE.md §3.
-_DEPTH_TIERS = ((15 * 2**20, 18), (150 * 2**20, 19), (2**30, 20))
+from swarmfs.stamps import BatchPlan, suggest_depth  # noqa: F401 — re-exported
 
 _UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 7 * 86400}
 
@@ -54,94 +39,22 @@ def parse_ttl(text: str) -> int:
     return value * unit
 
 
-def suggest_depth(size_bytes: int) -> int:
-    """Smallest batch depth that holds ``size_bytes`` with headroom."""
-    for limit, depth in _DEPTH_TIERS:
-        if size_bytes <= limit:
-            return depth
-    return 20 + math.ceil(math.log2(size_bytes / 2**30))
+def _manager(api_url: str | None):
+    from swarmfs.stamps import StampManager
+
+    fs = fsspec.filesystem("bzz", **({"api_url": api_url} if api_url else {}))
+    return fs, StampManager(fs.client)
 
 
-@dataclass
-class BatchPlan:
-    depth: int
-    amount: int
-    ttl_secs: int  # actual validity after the node's minimum is applied
-    cost_bzz: float
+def plan_batch(size_bytes: int, ttl_secs: int, api_url: str | None = None) -> BatchPlan:
+    """Price a batch for ``size_bytes`` lasting ``ttl_secs`` (swarmfs
+    does the math; see StampManager.plan)."""
+    fs, mgr = _manager(api_url)
+    return sync(fs.loop, mgr.plan, size_bytes, ttl_secs)
 
 
-def plan_batch(size_bytes: int, ttl_secs: int, api_url: str) -> BatchPlan:
-    """Price a batch for ``size_bytes`` lasting ``ttl_secs``, at the
-    current on-chain price (clamped to the node's minimum validity)."""
-    chain = _get_json(f"{api_url}/chainstate")
-    price = int(chain["currentPrice"])
-    # the node requires STRICTLY more than minimumValidityBlocks at
-    # purchase time, and the price can move between planning and buying
-    # (rejected live at the exact minimum) — pad the floor by an hour
-    floor = int(chain.get("minimumValidityBlocks", 0)) + 3600 // BLOCK_SECS
-    blocks = max(math.ceil(ttl_secs / BLOCK_SECS), floor)
-    depth = suggest_depth(size_bytes)
-    amount = blocks * price
-    return BatchPlan(
-        depth=depth,
-        amount=amount,
-        ttl_secs=blocks * BLOCK_SECS,
-        cost_bzz=amount * 2**depth / PLUR_PER_BZZ,
-    )
-
-
-def buy_batch(
-    api_url: str, amount: int, depth: int, *, wait_secs: int = 300
-) -> str:
-    """POST /stamps/{amount}/{depth}, then poll until the batch is
-    usable (on-chain confirmation plus node sync; took ~40 s live).
-    Returns the batch id."""
-    try:
-        created = _post_json(f"{api_url}/stamps/{amount}/{depth}")
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode(errors="replace")[:200]
-        if "insufficient amount" in detail:
-            hint = ("the on-chain price moved between planning and "
-                    "buying — retry, or ask for a longer --ttl")
-        else:
-            hint = (f"the node's wallet may lack xBZZ or xDAI for gas "
-                    f"(check {api_url}/wallet). Fund it, or get a stamp "
-                    "from a service such as Beeport and pass it with "
-                    "--stamp")
-        raise RuntimeError(
-            f"buying the batch failed (HTTP {e.code}): {detail.strip()} — {hint}."
-        ) from None
-    batch_id = created["batchID"]
-    # from here on the money is spent: every failure path must carry the
-    # batch id, or a confirmed batch would be orphaned
-    deadline = time.monotonic() + wait_secs
-    while time.monotonic() < deadline:
-        try:
-            if _get_json(f"{api_url}/stamps/{batch_id}").get("usable"):
-                return batch_id
-        except urllib.error.HTTPError as e:
-            # 400/404 while the purchase tx confirms: not known yet
-            if e.code not in (400, 404):
-                raise RuntimeError(
-                    f"batch {batch_id} was bought (tx submitted) but "
-                    f"polling its status failed: {e} — check "
-                    f"{api_url}/stamps/{batch_id} and pass it with "
-                    "--stamp once usable"
-                ) from None
-        time.sleep(3)
-    raise TimeoutError(
-        f"batch {batch_id} was bought but is still not usable after "
-        f"{wait_secs}s — it may just need longer; check "
-        f"{api_url}/stamps/{batch_id} and retry with --stamp once usable"
-    )
-
-
-def _get_json(url: str) -> dict:
-    with urllib.request.urlopen(url, timeout=30) as resp:
-        return json.load(resp)
-
-
-def _post_json(url: str) -> dict:
-    req = urllib.request.Request(url, method="POST")
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        return json.load(resp)
+def buy_batch(api_url: str | None, amount: int, depth: int) -> str:
+    """Buy a batch and wait until usable; returns the batch id (swarmfs
+    does the purchase; see StampManager.buy)."""
+    fs, mgr = _manager(api_url)
+    return sync(fs.loop, mgr.buy, amount, depth)

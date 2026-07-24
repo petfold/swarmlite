@@ -1,5 +1,6 @@
-"""Stamp purchase helper: sizing, pricing, buying — all offline (the
-node API is stubbed at the _get_json/_post_json seam)."""
+"""CLI-side stamp purchase flow: TTL parsing and the --buy UX. The
+mechanics (sizing tiers, pricing, purchase, polling) live in swarmfs
+and are tested there (tests/test_stamps.py in the swarmfs repo)."""
 
 import pytest
 
@@ -20,71 +21,12 @@ def test_parse_ttl():
             stamps.parse_ttl(bad)
 
 
-def test_suggest_depth_tiers():
-    assert stamps.suggest_depth(1 * MB) == 18
-    assert stamps.suggest_depth(15 * MB) == 18
-    assert stamps.suggest_depth(16 * MB) == 19  # 42 MB filled a depth-18 live
-    assert stamps.suggest_depth(150 * MB) == 19
-    assert stamps.suggest_depth(1024 * MB) == 20
-    assert stamps.suggest_depth(2048 * MB) == 21  # doubling past 1 GB
-    assert stamps.suggest_depth(5 * 1024 * MB) == 23
+def test_mechanics_are_swarmfs_reexports():
+    # the sizing/pricing/purchase logic must have exactly one home
+    import swarmfs.stamps
 
-
-def test_plan_batch_clamps_to_minimum_validity(monkeypatch):
-    monkeypatch.setattr(stamps, "_get_json", lambda url: {
-        "currentPrice": "1000", "minimumValidityBlocks": 17280,
-    })
-    floor = 17280 + 720  # node minimum plus the 1h price-drift pad
-    plan = stamps.plan_batch(10 * MB, ttl_secs=3600, api_url="http://x")
-    assert plan.depth == 18
-    assert plan.amount == floor * 1000  # 1h asked, padded 24h minimum wins
-    assert plan.ttl_secs == floor * 5
-    assert plan.cost_bzz == pytest.approx(floor * 1000 * 2**18 / 10**16)
-
-    week = stamps.parse_ttl("7d")
-    plan = stamps.plan_batch(10 * MB, ttl_secs=week, api_url="http://x")
-    assert plan.amount == (week // 5) * 1000
-    assert plan.ttl_secs == week
-
-
-def test_buy_batch_polls_until_usable(monkeypatch):
-    # first polls 400 while the purchase tx confirms (seen live), then
-    # the batch appears, then becomes usable
-    import urllib.error
-
-    def not_found():
-        raise urllib.error.HTTPError("http://x", 400, "Bad Request", {}, None)
-
-    polls = iter([not_found, not_found, lambda: {"usable": False},
-                  lambda: {"usable": True}])
-    monkeypatch.setattr(stamps, "_post_json", lambda url: {"batchID": "ab" * 32})
-    monkeypatch.setattr(stamps, "_get_json", lambda url: next(polls)())
-    monkeypatch.setattr(stamps.time, "sleep", lambda s: None)
-    assert stamps.buy_batch("http://x", 1000, 18) == "ab" * 32
-
-
-def test_buy_batch_never_loses_the_bought_id(monkeypatch):
-    import urllib.error
-
-    monkeypatch.setattr(stamps, "_post_json", lambda url: {"batchID": "ee" * 32})
-
-    def boom(url):
-        raise urllib.error.HTTPError(url, 500, "Internal Server Error", {}, None)
-
-    monkeypatch.setattr(stamps, "_get_json", boom)
-    monkeypatch.setattr(stamps.time, "sleep", lambda s: None)
-    with pytest.raises(RuntimeError, match=f"batch {'ee' * 32} was bought"):
-        stamps.buy_batch("http://x", 1000, 18)
-
-
-def test_buy_batch_timeout_is_actionable(monkeypatch):
-    monkeypatch.setattr(stamps, "_post_json", lambda url: {"batchID": "cd" * 32})
-    monkeypatch.setattr(stamps, "_get_json", lambda url: {"usable": False})
-    monkeypatch.setattr(stamps.time, "sleep", lambda s: None)
-    ticks = iter(range(0, 10_000, 100))
-    monkeypatch.setattr(stamps.time, "monotonic", lambda: next(ticks))
-    with pytest.raises(TimeoutError, match="retry with --stamp"):
-        stamps.buy_batch("http://x", 1000, 18, wait_secs=300)
+    assert stamps.BatchPlan is swarmfs.stamps.BatchPlan
+    assert stamps.suggest_depth is swarmfs.stamps.suggest_depth
 
 
 def test_cli_buy_flow(monkeypatch, tmp_path, capsys):
