@@ -10,10 +10,37 @@ Bee endpoint / signer come from flags or the swarmfs conventions
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import sys
+
+_PLACEHOLDER = re.compile(r"<[^<> ]+>")
+
+
+def _reject_placeholders(**values: str | None) -> None:
+    """Fail early, with advice, when a docs placeholder like <root> was
+    copy-pasted verbatim instead of the real value."""
+    for name, value in values.items():
+        if value and (m := _PLACEHOLDER.search(value)):
+            raise ValueError(
+                f"{name} contains the placeholder {m.group(0)} — replace it "
+                f"with the real value (the root/reference and feed URL are "
+                f"printed by 'swarmlite publish'; stamp batch IDs by "
+                f"'curl $BEE_API_URL/stamps')"
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _run(argv)
+    except Exception as e:  # CLI boundary: one actionable line, no traceback
+        if os.environ.get("SWARMLITE_DEBUG"):
+            raise
+        print(f"swarmlite: {e}", file=sys.stderr)
+        return 1
+
+
+def _run(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="swarmlite",
         description="Verifiable serverless SQLite hosting on Swarm.",
@@ -50,6 +77,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "publish":
         from .publish import publish
 
+        _reject_placeholders(
+            db_path=args.db_path, name=args.name, feed=args.feed,
+            signer=args.signer, stamp=args.stamp, api_url=args.api_url,
+        )
         root = publish(
             args.db_path, name=args.name, feed=args.feed,
             signer=args.signer, stamp=args.stamp, api_url=args.api_url,
@@ -60,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "query":
         from .vfs import connect
 
+        _reject_placeholders(url=args.url, api_url=args.api_url)
         opts = {"api_url": args.api_url} if args.api_url else {}
         if args.block_size:
             opts["block_size"] = args.block_size

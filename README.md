@@ -16,6 +16,9 @@ Post 73123: on sqlite
 fetched 5 pages (20 KB) in 5 reads, of a 134.5 MB file    # 0.02 s
 ```
 
+(`<root>` stands for the 64-hex reference `swarmlite publish` prints;
+the CLI will remind you if a placeholder slips through.)
+
 Warm repeats fetch nothing; an FTS5 full-text search fetched 12 pages.
 
 **Status: v2.** The Python read path (`swarmlite.connect`, `swarmlite
@@ -61,7 +64,7 @@ python3 -m venv .venv && source .venv/bin/activate
 git clone https://github.com/petfold/swarmfs ../swarmfs   # until it's on PyPI
 pip install -e ../swarmfs -e ".[test]"
 
-pytest                           # 27 tests, no node needed
+pytest                           # 29 tests, no node needed
 python examples/offline_demo.py  # the demo, offline — no node, no funds
 ```
 

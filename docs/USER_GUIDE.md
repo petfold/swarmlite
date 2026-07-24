@@ -76,7 +76,7 @@ pip install -e ../swarmfs -e ".[test]"
 Verify:
 
 ```bash
-pytest                          # 27 tests, no node needed
+pytest                          # 29 tests, no node needed
 python examples/offline_demo.py # the demo of §4, offline
 swarmlite --help
 ```
@@ -240,6 +240,9 @@ swarmlite query "bzz://<root>/demo.db" \
 # Post 73123: on sqlite
 # fetched 5 pages (20 KB) in 5 reads, of a 134.5 MB file
 ```
+
+`<root>` is the 64-hex reference printed by `swarmlite publish` (§5) —
+substitute your own; the ids above are from the 100 k-row demo build.
 
 Options: `--api-url` (else `$BEE_API_URL`, else localhost), `--stats`
 (page-economy line on stderr), `--block-size` (transport readahead,
