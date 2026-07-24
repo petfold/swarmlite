@@ -76,7 +76,7 @@ pip install -e ../swarmfs -e ".[test]"
 Verify:
 
 ```bash
-pytest                          # 38 tests, no node needed
+pytest                          # 40 tests, no node needed
 python examples/offline_demo.py # the demo of §4, offline
 swarmlite --help
 ```
@@ -251,7 +251,7 @@ from offline_demo import build
 open("demo.db", "wb").write(build())
 ```
 
-then `swarmlite publish demo.db --name demo.db --stamp <batchID>`.
+then `swarmlite publish demo.db --stamp <batchID>`.
 
 ## 6. Querying a published database
 

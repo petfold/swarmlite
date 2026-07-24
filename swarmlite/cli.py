@@ -86,7 +86,11 @@ def _run(argv: list[str] | None = None) -> int:
 
     p_pub = sub.add_parser("publish", help="publish a local SQLite file")
     p_pub.add_argument("db_path")
-    p_pub.add_argument("--name", default="site.db")
+    p_pub.add_argument(
+        "--name",
+        help="file name inside the published manifest "
+        "(default: the source file's name)",
+    )
     p_pub.add_argument("--feed", help="feed topic to advance to the new root")
     p_pub.add_argument(
         "--signer",

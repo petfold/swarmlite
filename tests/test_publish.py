@@ -174,3 +174,35 @@ def test_publish_signer_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("SWARMLITE_SIGNER", "22" * 32)
     src = make_db(tmp_path / "src.db", rows=10)
     assert swarmlite.publish(src, feed="site", quiet=True) == "f" * 64
+
+
+def test_prepare_no_warning_for_without_rowid_or_shadow_tables(tmp_path):
+    """The PRIMARY KEY of a WITHOUT ROWID table IS its index, and FTS5
+    shadow tables are rowid-accessed internals — neither deserves the
+    missing-index warning (both false-positived on the demo DB)."""
+    src = tmp_path / "src.db"
+    con = sqlite3.connect(src)
+    con.execute(
+        "CREATE TABLE kw(word TEXT, id INTEGER, PRIMARY KEY(word, id))"
+        " WITHOUT ROWID"
+    )
+    con.executemany(
+        "INSERT INTO kw VALUES (?, ?)", ((f"w{i}", i) for i in range(6000))
+    )
+    con.execute("CREATE VIRTUAL TABLE ft USING fts5(t)")
+    con.executemany(
+        "INSERT INTO ft VALUES (?)", ((f"word number {i}",) for i in range(6000))
+    )
+    con.commit()
+    con.close()
+    warnings = prepare(src, tmp_path / "out.db")
+    assert not any("no index" in w for w in warnings), warnings
+
+
+def test_publish_name_defaults_to_source_filename(tmp_path, monkeypatch, capsys):
+    src = make_db(tmp_path / "mydata.db")
+    fs = FakeFS()
+    patch_fs(monkeypatch, lambda proto, **kw: fs)
+    root = swarmlite.publish(src)
+    assert [r for _, r in fs.put_calls] == ["bzz://new/mydata.db"]
+    assert f"bzz://{root}/mydata.db" in capsys.readouterr().err

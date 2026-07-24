@@ -87,10 +87,17 @@ def prepare(db_path: str | os.PathLike, out_path: str | os.PathLike) -> list[str
                 f"(one page = one Swarm chunk)"
             )
 
-        for (table,) in dst.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%' AND sql LIKE 'CREATE TABLE%'"
+        # ordinary tables only: 'shadow' skips virtual-table internals
+        # (FTS5's _docsize etc. — rowid-accessed by the extension), and
+        # wr=1 (WITHOUT ROWID) means the PRIMARY KEY *is* the table's
+        # B-tree, so leading-PK-column filters are index searches
+        for schema, table, ttype, _ncol, wr, _strict in dst.execute(
+            "PRAGMA table_list"
         ).fetchall():
+            if schema != "main" or ttype != "table" or wr:
+                continue
+            if table.startswith("sqlite_"):
+                continue
             (n,) = dst.execute(f'SELECT count(*) FROM "{table}"').fetchone()
             (idx,) = dst.execute(
                 "SELECT count(*) FROM sqlite_master WHERE type='index' "
@@ -121,7 +128,7 @@ def prepare(db_path: str | os.PathLike, out_path: str | os.PathLike) -> list[str
 def publish(
     db_path: str | os.PathLike,
     *,
-    name: str = "site.db",
+    name: str | None = None,
     feed: str | None = None,
     stamp: str = "auto",
     signer: str | None = None,
@@ -140,7 +147,10 @@ def publish(
     to ``$SWARMLITE_SIGNER``) and the swarmfs ``feeds`` extra.
 
     Warnings from the checklist go to stderr unless ``quiet``.
+    ``name`` is the file name inside the published manifest; it defaults
+    to the source file's own name.
     """
+    name = name or os.path.basename(os.fspath(db_path))
     fs_opts: dict = {"stamp": stamp}
     if api_url:
         fs_opts["api_url"] = api_url

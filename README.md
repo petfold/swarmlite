@@ -64,7 +64,7 @@ python3 -m venv .venv && source .venv/bin/activate
 git clone https://github.com/petfold/swarmfs ../swarmfs   # until it's on PyPI
 pip install -e ../swarmfs -e ".[test]"
 
-pytest                           # 38 tests, no node needed
+pytest                           # 40 tests, no node needed
 python examples/offline_demo.py  # the demo, offline — no node, no funds
 ```
 
@@ -84,7 +84,7 @@ python -c "import sys; sys.path.insert(0, 'examples');
 from offline_demo import build
 open('demo.db', 'wb').write(build(rows=30000))"
 
-swarmlite publish demo.db --name demo.db
+swarmlite publish demo.db
 # pin:  bzz://<root>/demo.db      <- the 64-hex root hash is minted HERE
 ```
 
@@ -103,7 +103,7 @@ For a stable, updatable URL, publish into a feed instead (one upload
 advances the signed feed AND yields the pin):
 
 ```bash
-swarmlite publish demo.db --name demo.db --feed mysite --signer <private key hex>
+swarmlite publish demo.db --feed mysite --signer <private key hex>
 # pin:  bzz://<root>/demo.db
 # feed: bzzf://<owner>/mysite/demo.db
 ```
