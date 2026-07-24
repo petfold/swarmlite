@@ -473,7 +473,11 @@ Topics are hashed exactly like the Python side, so whatever
 
 ## 10. Limitations (current, honest)
 
-- Read-only by design (in the browser too).
+- *Reader connections* are read-only by design (in the browser too):
+  a published snapshot is content-addressed, so it cannot change under
+  its own root. Writes are not missing — they are the publisher's side
+  (§5): full SQL against your local file, then publish a new snapshot
+  and advance the feed. Never a SQL `UPDATE` across the network.
 - The vendored wa-sqlite build has no FTS5 — use the covering-index
   pattern (§7) for browser search; Python readers get FTS5.
 - Fresh feeds take minutes to become resolvable (§9);
