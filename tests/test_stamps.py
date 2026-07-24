@@ -35,14 +35,14 @@ def test_plan_batch_clamps_to_minimum_validity(monkeypatch):
         "currentPrice": "1000", "minimumValidityBlocks": 17280,
     })
     floor = 17280 + 720  # node minimum plus the 1h price-drift pad
-    plan = stamps.plan_batch(40 * MB, ttl_secs=3600, api_url="http://x")
+    plan = stamps.plan_batch(10 * MB, ttl_secs=3600, api_url="http://x")
     assert plan.depth == 18
     assert plan.amount == floor * 1000  # 1h asked, padded 24h minimum wins
     assert plan.ttl_secs == floor * 5
     assert plan.cost_bzz == pytest.approx(floor * 1000 * 2**18 / 10**16)
 
     week = stamps.parse_ttl("7d")
-    plan = stamps.plan_batch(40 * MB, ttl_secs=week, api_url="http://x")
+    plan = stamps.plan_batch(10 * MB, ttl_secs=week, api_url="http://x")
     assert plan.amount == (week // 5) * 1000
     assert plan.ttl_secs == week
 
