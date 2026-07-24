@@ -92,18 +92,21 @@ commit — the datacat pattern: authoritative store, disposable SQL
 projection. The publish step is where that materialization plugs in, but
 swarmlite itself is agnostic about where the local DB came from.
 
-## 4. The browser phase (v2)
+## 4. The browser phase (v2, built)
 
-SQLite compiles to WASM (sql.js, official builds). The same VFS idea in JS
-fetches pages via a gateway's range reads — or natively in a Swarm-aware
-browser. Precedent: phiresky's `sql.js-httpvfs` (HTTP ranges against
-static hosting) — transplants almost perfectly; the additions are chunk
-verification and feed resolution. Resulting shape: HTML + JS served from
-an immutable Swarm root, data queried client-side from a published
-database — a multi-GB dataset behind a static site, no origin server.
+The same VFS idea in JS, on wa-sqlite's Asyncify build (async VFS
+methods, so no COOP/COEP headers): pages fetched via a gateway's HTTP
+range reads. Precedent: phiresky's `sql.js-httpvfs` (HTTP ranges against
+static hosting) — it transplanted almost perfectly; the additions are
+feed resolution (`resolveFeed`: Bee returns the reference in the /feeds
+Etag) and, still to come, client-side chunk verification for untrusted
+gateways (a local light node verifies natively). Resulting shape, live
+since 2026-07-24: HTML + JS + wasm + database served from one immutable
+Swarm root, data queried client-side — a multi-GB dataset behind a
+static site, no origin server.
 
-Kept in `js/` as a separate build when started; the Python package does
-not depend on it.
+Lives in `js/`, fully vendored (a Swarm-publishable page can't use a
+CDN or npm); the Python package does not depend on it.
 
 ## 5. Web-app patterns this enables
 

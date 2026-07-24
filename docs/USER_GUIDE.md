@@ -4,8 +4,8 @@ Everything needed to go from an empty machine to running lazy, verifiable
 `SELECT` against a SQLite database published on Ethereum Swarm.
 
 All examples in this guide were run against a real Bee 2.8.1 light node on
-Gnosis mainnet (via Swarm Desktop) on 2026-07-23; the numbers shown are
-from that session.
+Gnosis mainnet (via Swarm Desktop) on 2026-07-23/24; the numbers shown are
+from those sessions.
 
 ---
 
@@ -24,6 +24,10 @@ The query walks SQLite's B-tree; depth grows logarithmically, so cost is a
 handful of 4 KB pages regardless of file size. SQLite's default page size
 equals a Swarm chunk, and the file is content-addressed, so what you read
 is verifiable against a 32-byte root. There is no database server anywhere.
+
+The same trick runs **in a browser** with no install at all: the demo site
+(§7) queried a 41.9 MB database live at 5 Range requests / 20 KB for a
+cold point lookup — 23 pages (92 KB) for a whole 4-query session.
 
 Writes are the publisher's job: work on a local file with full SQL, then
 ship an immutable snapshot (and optionally advance a feed). Never a SQL
@@ -182,7 +186,7 @@ swarmlite publish site.db --feed mysite --signer <private key hex>
 The signer key can also come from `$SWARMLITE_SIGNER`; the owner address
 is derived from it. Requires the feeds extra
 (`pip install -e "../swarmfs[feeds]"`). Note: a *freshly published* feed
-takes a few minutes to become resolvable on mainnet (§8); the pin URL
+takes a few minutes to become resolvable on mainnet (§9); the pin URL
 works immediately. Republishing to the same feed updates what readers
 see; every previous pin keeps working (free snapshots).
 
@@ -270,7 +274,7 @@ URL forms:
 - `bzzf://<owner>/<topic>/<name>` — a feed, resolved to the latest
   published version at open time (verified live: a feed-published test DB
   answered a point lookup in 3 page fetches). Freshly published feeds
-  take minutes to become resolvable (§8); pin roots when you need
+  take minutes to become resolvable (§9); pin roots when you need
   reproducibility.
 - `file://…`, `memory://…` — local/testing, same code path.
 
@@ -287,7 +291,102 @@ default 1024 ≈ 4 MB) and the transport's readahead block
 The `--stats` counters report what the VFS requested (pages); the network
 may transfer more (whole blocks). If the numbers matter, measure both.
 
-## 7. Patterns for applications
+## 7. The browser demo (a database behind a static page)
+
+The `js/` package is the browser twin of the Python VFS: a
+[wa-sqlite](https://github.com/rhashimoto/wa-sqlite) (SQLite-WASM) VFS
+that fetches 4 KB pages with HTTP Range requests straight from a
+gateway. **Readers need nothing installed** — no wallet, no node
+software, no browser extension: any modern browser opens the page.
+(Somebody's Bee node/gateway has to *serve* the content, e.g. your
+Swarm Desktop node at `localhost:1633` or a public gateway.)
+
+Everything is vendored (wa-sqlite 1.0.0 Asyncify build, js-sha3 for
+topic hashing), so the page, the reader, the wasm engine and the
+database publish together under **one immutable root** — the site
+carries its own database, all URLs relative.
+
+### Publish the demo site
+
+With a node and a usable stamp (§3):
+
+```bash
+python js/demo/publish_site.py --stamp <batchID>
+# building a demo database (30,000 posts) ...
+# uploading 43.0 MB site ...
+# root: 5ac6a781227c7481bbc8da9bc0e9abb87179f8c542c764acdcaa72806d8634da
+# site: http://localhost:1633/bzz/<root>/index.html
+# db:   http://localhost:1633/bzz/<root>/demo.db
+```
+
+Open the `site:` URL. The latest posts load, the search box does
+keyword search, and the status line shows the page economy per query.
+Measured live (Bee 2.8.1): cold point lookup **5 Range requests /
+20 KB**; a whole 4-query session **23 pages (92 KB)** of a 41.9 MB
+database. `--rows` scales the demo data; `--api-url` targets another
+node.
+
+### Use the reader in your own page
+
+Copy `js/src/` and `js/vendor/` next to your page (that's the whole
+dependency tree), then:
+
+```js
+import { open, resolveFeed } from './src/index.js';
+
+const db = await open('http://localhost:1633/bzz/<root>/site.db');
+const rows = await db.query('SELECT title FROM posts WHERE id = ?', [12345]);
+console.log(db.stats()); // { readCount, pagesFetched, bytesFetched, fileSize }
+```
+
+Any URL served with HTTP Range support works — for the single-root
+pattern just use a relative URL (`new URL('site.db', location.href)`,
+as `js/demo/app.js` does). For a stable, updatable site, resolve a feed
+first — once, at page load (a feed can move mid-session; a database
+must not):
+
+```js
+const { reference } = await resolveFeed(
+  'http://localhost:1633', '<owner-hex>', 'mysite');
+const db = await open(`http://localhost:1633/bzz/${reference}/site.db`);
+```
+
+Topics are hashed exactly like the Python side, so whatever
+`swarmlite publish --feed <topic>` printed resolves as-is.
+
+### Browser-specific notes
+
+- **Search without FTS5:** the vendored wa-sqlite build has no FTS5.
+  The demo uses a covering inverted index instead —
+  `kw(word, ts, id, PRIMARY KEY(word, ts, id)) WITHOUT ROWID` — so
+  "newest N posts matching *word*" resolves inside one index range
+  (~15 pages). The ORDER BY column must be **in the key**: without
+  `ts` there, the same query cost a point lookup per match (~2,300
+  pages, measured). Publisher-side indexing is the whole game.
+- **CORS:** page and database under one root on the same gateway is
+  same-origin and just works. A page hosted elsewhere needs the
+  gateway to allow it (`cors-allowed-origins` in the Bee config).
+- **Developer tests** (Node ≥ 18; readers never need Node): offline —
+
+  ```bash
+  node js/test/feed.mjs           # feed resolution, against a stubbed gateway
+  python - <<'EOF'                # build the demo DB locally
+  import sys
+  sys.path.insert(0, 'examples')
+  from offline_demo import build
+  open('/tmp/demo.db', 'wb').write(build(rows=30000))
+  EOF
+  node js/test/serve.mjs /tmp &   # bundled Range-capable static server
+  node js/test/smoke.mjs http://localhost:8977/demo.db
+  ```
+
+  The smoke test asserts correctness AND the read budget; point it at
+  the live `db:` URL from `publish_site.py` for the gateway version.
+- **Verification:** against your local light node, the node itself
+  verifies every retrieved chunk. Client-side BMT verification (for
+  untrusted gateways) is on the roadmap under "Later".
+
+## 8. Patterns for applications
 
 - **Search:** build an FTS5 index at publish time; it's just more B-tree
   pages, so `MATCH` queries stay lazy (12 pages in the demo).
@@ -304,7 +403,7 @@ may transfer more (whole blocks). If the numbers matter, measure both.
   to RAM — `temp_store=MEMORY` is forced), and expecting writes: this is
   a read replica by design.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 - **`StampError: no usable postage stamp ... full (utilization at 100%)`**
   — the batch is exhausted (immutable batches can't be reused once any
@@ -331,11 +430,12 @@ may transfer more (whole blocks). If the numbers matter, measure both.
   don't exist on Swarm.
 - **`pip` refuses to install** — PEP 668; use the venv (§2).
 
-## 9. Limitations (current, honest)
+## 10. Limitations (current, honest)
 
-- Read-only by design; the browser/WASM reader (v2) is not built yet —
-  see `docs/roadmap.md`.
-- Fresh feeds take minutes to become resolvable (§8);
+- Read-only by design (in the browser too).
+- The vendored wa-sqlite build has no FTS5 — use the covering-index
+  pattern (§7) for browser search; Python readers get FTS5.
+- Fresh feeds take minutes to become resolvable (§9);
   `con.swarmlite_url` records the URL, not yet the resolved root, for
   feed opens.
 - Concurrent `connect()` calls to the *same* URL are unsupported

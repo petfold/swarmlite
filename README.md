@@ -18,13 +18,15 @@ fetched 5 pages (20 KB) in 5 reads, of a 134.5 MB file    # 0.02 s
 
 Warm repeats fetch nothing; an FTS5 full-text search fetched 12 pages.
 
-**Status: v1.** The read path (`swarmlite.connect`, `swarmlite query`) and
-the publisher (`swarmlite publish`, with feed support) are implemented,
-tested (27 offline tests + opt-in live round-trips), and demonstrated
-live — including `bzzf://` feed reads. The browser/WASM reader (v2) is
-next. **[docs/USER_GUIDE.md](docs/USER_GUIDE.md) has the complete setup
-and worked examples**; design in [docs/DESIGN.md](docs/DESIGN.md), plan
-in [docs/roadmap.md](docs/roadmap.md).
+**Status: v2.** The Python read path (`swarmlite.connect`, `swarmlite
+query`), the publisher (`swarmlite publish`, with feed support), and the
+**browser reader** (`js/`, SQLite-WASM — no install, no wallet, no
+extension) are implemented, tested (offline suites + opt-in live
+round-trips), and demonstrated live, including `bzzf://` feed reads and
+a self-contained demo site. **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+has the complete setup and worked examples**; design in
+[docs/DESIGN.md](docs/DESIGN.md), plan in
+[docs/roadmap.md](docs/roadmap.md).
 
 ## How it works
 
@@ -99,6 +101,23 @@ URL forms: `bzz://<root>/site.db` pins an immutable version;
 `bzzf://<owner>/<topic>` follows a feed to the latest. `file://` and
 `memory://` work too (tests, local use). Connections are strictly
 read-only — DML raises `apsw.ReadOnlyError`.
+
+### In the browser
+
+The same lazy-page trick runs inside SQLite-WASM (`js/`, vendored
+wa-sqlite): a static page, the reader, the wasm engine and the database
+all publish under **one immutable Swarm root** — a multi-GB dataset
+behind a static site, no server, nothing to install for readers.
+
+```bash
+python js/demo/publish_site.py --stamp <batchID>
+# site: http://localhost:1633/bzz/<root>/index.html
+```
+
+Measured live: a cold point lookup fetched 5 pages (20 KB) of a 41.9 MB
+database; a whole 4-query session 23 pages (92 KB). Feeds resolve in the
+browser too (`resolveFeed`), so the page can always show the latest
+published snapshot. User Guide §7 has the details.
 
 ## What this is not
 
