@@ -110,10 +110,10 @@ Goal: the same lazy-page trick inside SQLite-WASM in a browser.
       Bee 2.8.1: cold point lookup **5 reads / 20 KB**, warm 0; whole
       4-query session 23 pages / 92 KB of a 41.9 MB database.
 
-**Exit criterion: MET** (measured via the Node smoke test against the
-live gateway; all site assets serve with correct MIME types incl.
-`application/wasm` — final in-browser click-through still to be
-eyeballed). Demo root (2026-07-24):
+**Exit criterion: MET** — measured via the Node smoke test against the
+live gateway, and confirmed in a real browser (Brave, 2026-07-24):
+posts load, keyword search works, the status line reports per-query
+page counts. Demo root:
 `5ac6a781227c7481bbc8da9bc0e9abb87179f8c542c764acdcaa72806d8634da`.
 
 ## v2.1 — client-side verification (JS)
