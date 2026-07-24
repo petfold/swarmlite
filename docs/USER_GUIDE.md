@@ -76,7 +76,7 @@ pip install -e ../swarmfs -e ".[test]"
 Verify:
 
 ```bash
-pytest                          # 40 tests, no node needed
+pytest                          # 45 tests, no node needed
 python examples/offline_demo.py # the demo of §4, offline
 swarmlite --help
 ```
@@ -136,9 +136,15 @@ so leave headroom:
 
 | upload size | depth | theoretical capacity |
 |-------------|-------|----------------------|
-| ≤ 50 MB     | 18    | 1 GB                 |
-| ≤ 300 MB    | 19    | 2 GB                 |
+| ≤ 15 MB     | 18    | 1 GB                 |
+| ≤ 150 MB    | 19    | 2 GB                 |
 | ≤ 1 GB      | 20    | 4 GB                 |
+
+(The gap between the columns is the balls-into-buckets effect: chunks
+hash uniformly into 65 536 buckets and an immutable batch dies when any
+single bucket fills — measured live: one **42 MB** upload filled a
+depth-18 batch. The table keeps that risk under ~5%; `--buy` uses the
+same tiers.)
 
 **Choosing `amount`** (lifetime): validity in seconds is roughly
 `amount / currentPrice × 5` (Gnosis block time), with `currentPrice` from
@@ -216,6 +222,15 @@ see; every previous pin keeps working (free snapshots).
 Same thing from Python: `swarmlite.publish("site.db", feed="mysite",
 signer=key, stamp="<batchID>") -> root`.
 
+**Rule of thumb: if the database will ever change, publish into a feed
+from the very first version.** A feed costs nothing extra (the same
+single upload advances the feed *and* yields the pin), and the
+`bzzf://` URL you hand out is stable from day one. Retrofitting a feed
+later means redistributing a new URL to every reader — exactly the
+problem feeds exist to solve. Skip the feed only for truly one-shot
+datasets, or when readers learn the root some other way (app config, a
+registry, a contract).
+
 ### Updating a published database (yes, UPDATE works — locally)
 
 The write cycle is: edit the local file with ordinary SQL, republish.
@@ -247,6 +262,28 @@ free). Re-publishing an *unchanged* file re-derives the identical root
 Deleting is the same story: you can stop referencing a root, and it
 expires with its stamp, but you cannot recall bytes others may have
 pinned. Publish accordingly.
+
+### Listing snapshots
+
+With a feed, the version history is not something you have to keep —
+the feed *is* the history: every update is a signed (timestamp, root)
+pair, permanently addressable. `swarmlite snapshots` walks it (run
+live, a feed published twice):
+
+```bash
+swarmlite snapshots "bzzf://<owner>/snapshot-test/note.txt" --verify
+# 0  2026-07-24 15:26:18 UTC  bzz://c250c588.../note.txt
+# 1  2026-07-24 15:26:21 UTC  bzz://a53a9062.../note.txt   <- latest
+```
+
+Each line is a fully usable pin — `swarmlite query
+"bzz://c250c588.../db"` reads yesterday's data as easily as today's
+(while its stamp lives). `--verify` signature-checks every update, so
+even an untrusted endpoint cannot slip a forged version into the list;
+an update that is not currently retrievable shows as such rather than
+breaking the walk. Same thing from Python:
+`swarmlite.snapshots("bzzf://<owner>/<topic>") -> [Snapshot(index,
+root, timestamp), ...]`, oldest first.
 
 ### What the checklist does, and why (manual version)
 
@@ -465,7 +502,8 @@ Topics are hashed exactly like the Python side, so whatever
   pages, so `MATCH` queries stay lazy (12 pages in the demo).
 - **Pin vs. follow:** applications wanting reproducibility record the
   root they read (`con.swarmlite_url`); dashboards wanting freshness
-  follow a feed.
+  follow a feed. `swarmlite snapshots` (§5) lists a feed's whole
+  version history when you need to go back.
 - **Per-tenant data:** one database file per user/feed — isolation and
   sharding for free; a client opens only its own.
 - **Multi-author:** one feed per author; the publisher merges and

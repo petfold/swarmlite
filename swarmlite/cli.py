@@ -2,6 +2,7 @@
 
     swarmlite publish site.db [--feed TOPIC] [--stamp ID] [--name FILE]
     swarmlite query URL SQL        # smoke-test a published database
+    swarmlite snapshots FEED_URL   # list every version a feed published
 
 Bee endpoint / signer come from flags or the swarmfs conventions
 (BEE_API_URL; signer key via env/keystore — decide in v1).
@@ -127,6 +128,16 @@ def _run(argv: list[str] | None = None) -> int:
         help="print pages/bytes fetched vs. file size to stderr",
     )
 
+    p_s = sub.add_parser(
+        "snapshots", help="list every version a feed has published"
+    )
+    p_s.add_argument("url", help="bzzf://<owner>/<topic>[/file.db]")
+    p_s.add_argument("--api-url", dest="api_url")
+    p_s.add_argument(
+        "--verify", action="store_true",
+        help="signature-check every update (needs swarmfs[feeds])",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "publish":
@@ -173,6 +184,27 @@ def _run(argv: list[str] | None = None) -> int:
                 f"of a {s['file_size'] / 2**20:.1f} MB file",
                 file=sys.stderr,
             )
+        return 0
+
+    if args.command == "snapshots":
+        from .snapshots import parse_feed_url, snapshots
+
+        _reject_placeholders(url=args.url, api_url=args.api_url)
+        opts = {"api_url": args.api_url} if args.api_url else {}
+        _, _, fname = parse_feed_url(args.url)
+        snaps = snapshots(args.url, verify=args.verify, **opts)
+        if not snaps:
+            print("swarmlite: feed has no updates yet", file=sys.stderr)
+            return 1
+        suffix = f"/{fname}" if fname else ""
+        for s in snaps:
+            when = (
+                s.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")
+                if s.timestamp else "-"
+            )
+            pin = f"bzz://{s.root}{suffix}" if s.root else "(not retrievable yet)"
+            mark = "   <- latest" if s.index == snaps[-1].index else ""
+            print(f"{s.index}\t{when}\t{pin}{mark}")
         return 0
 
     parser.error("unknown command")

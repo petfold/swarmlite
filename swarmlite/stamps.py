@@ -24,11 +24,13 @@ from dataclasses import dataclass
 BLOCK_SECS = 5  # Gnosis block time
 PLUR_PER_BZZ = 10**16
 
-# file size -> batch depth, with headroom: theoretical capacity is
-# 2**depth * 4 KB, but an immutable batch fails as soon as any single
-# bucket fills, so small files still want depth >= 18. Matches the table
-# in docs/USER_GUIDE.md §3 (validated live at depths 18-20).
-_DEPTH_TIERS = ((50 * 2**20, 18), (300 * 2**20, 19), (2**30, 20))
+# file size -> batch depth. Theoretical capacity is 2**depth * 4 KB,
+# but an immutable batch fails as soon as any SINGLE bucket (of 65536)
+# fills — measured live: one 42 MB upload filled a depth-18 batch
+# (4 slots per bucket). These tiers keep the balls-into-buckets
+# overflow risk under ~5% per upload; keep in sync with the table in
+# docs/USER_GUIDE.md §3.
+_DEPTH_TIERS = ((15 * 2**20, 18), (150 * 2**20, 19), (2**30, 20))
 
 _UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 7 * 86400}
 

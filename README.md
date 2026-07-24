@@ -64,7 +64,7 @@ python3 -m venv .venv && source .venv/bin/activate
 git clone https://github.com/petfold/swarmfs ../swarmfs   # until it's on PyPI
 pip install -e ../swarmfs -e ".[test]"
 
-pytest                           # 40 tests, no node needed
+pytest                           # 45 tests, no node needed
 python examples/offline_demo.py  # the demo, offline — no node, no funds
 ```
 
@@ -99,14 +99,19 @@ swarmlite query "bzz://<root>/demo.db" \
 No stamp yet? `swarmlite publish demo.db --buy` prices a batch sized
 for the file, shows the xBZZ cost, and buys it from the node's wallet.
 
-For a stable, updatable URL, publish into a feed instead (one upload
-advances the signed feed AND yields the pin):
+If the data will ever change, publish into a feed from the first
+version — the same single upload advances the signed feed AND yields
+the pin, and readers get a stable URL from day one:
 
 ```bash
 swarmlite publish demo.db --feed mysite --signer <private key hex>
 # pin:  bzz://<root>/demo.db
 # feed: bzzf://<owner>/mysite/demo.db
 ```
+
+Every publish is a permanent snapshot; `swarmlite snapshots
+"bzzf://<owner>/mysite/demo.db"` lists the whole version history, each
+line a pinned `bzz://` URL you can still query.
 
 ```python
 import swarmlite

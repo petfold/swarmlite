@@ -16,7 +16,8 @@ CLAUDE.md and docs/DESIGN.md before changing anything.
 
 from .vfs import SwarmVFS, connect
 from .publish import publish
+from .snapshots import Snapshot, snapshots
 
 __version__ = "0.1.0"
 
-__all__ = ["connect", "publish", "SwarmVFS", "__version__"]
+__all__ = ["connect", "publish", "snapshots", "Snapshot", "SwarmVFS", "__version__"]

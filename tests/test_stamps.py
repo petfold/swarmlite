@@ -22,9 +22,9 @@ def test_parse_ttl():
 
 def test_suggest_depth_tiers():
     assert stamps.suggest_depth(1 * MB) == 18
-    assert stamps.suggest_depth(50 * MB) == 18
-    assert stamps.suggest_depth(51 * MB) == 19
-    assert stamps.suggest_depth(300 * MB) == 19
+    assert stamps.suggest_depth(15 * MB) == 18
+    assert stamps.suggest_depth(16 * MB) == 19  # 42 MB filled a depth-18 live
+    assert stamps.suggest_depth(150 * MB) == 19
     assert stamps.suggest_depth(1024 * MB) == 20
     assert stamps.suggest_depth(2048 * MB) == 21  # doubling past 1 GB
     assert stamps.suggest_depth(5 * 1024 * MB) == 23
