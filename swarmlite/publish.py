@@ -187,6 +187,14 @@ def publish(
             root = fs.latest("new")
             if not quiet:
                 print(f"pin:  bzz://{root}/{name}", file=sys.stderr)
+                # whether the data will change is publishing intent — it
+                # cannot be read off the file, so say it where it matters
+                print(
+                    "tip:  this URL names exactly this version. If the "
+                    "data will change, republish with --feed <topic> so "
+                    "readers get one stable bzzf:// URL (User Guide §5)",
+                    file=sys.stderr,
+                )
         return root
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

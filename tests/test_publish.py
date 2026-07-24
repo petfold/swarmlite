@@ -205,4 +205,6 @@ def test_publish_name_defaults_to_source_filename(tmp_path, monkeypatch, capsys)
     patch_fs(monkeypatch, lambda proto, **kw: fs)
     root = swarmlite.publish(src)
     assert [r for _, r in fs.put_calls] == ["bzz://new/mydata.db"]
-    assert f"bzz://{root}/mydata.db" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert f"bzz://{root}/mydata.db" in err
+    assert "--feed" in err  # pin-only publish points at the feed option
