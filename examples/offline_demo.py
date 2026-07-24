@@ -127,7 +127,15 @@ def main():
     report(con, "FTS5", t, before)
 
     con.close()
-    print("\nSame code path as bzz:// — swap the URL to go live.")
+    print(
+        "\nSame code path as bzz:// — swap the URL to go live. Nothing was"
+        "\nuploaded (memory:// is in-RAM); to get a real bzz://<root> URL:"
+        "\n    python -c \"import sys; sys.path.insert(0, 'examples');"
+        " from offline_demo import build;"
+        " open('demo.db', 'wb').write(build(rows=30000))\""
+        "\n    swarmlite publish demo.db --name demo.db"
+        "\nThe 64-hex root hash is printed by publish (pin: bzz://<root>/...)."
+    )
 
 
 if __name__ == "__main__":

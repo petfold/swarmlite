@@ -64,7 +64,7 @@ python3 -m venv .venv && source .venv/bin/activate
 git clone https://github.com/petfold/swarmfs ../swarmfs   # until it's on PyPI
 pip install -e ../swarmfs -e ".[test]"
 
-pytest                           # 37 tests, no node needed
+pytest                           # 38 tests, no node needed
 python examples/offline_demo.py  # the demo, offline — no node, no funds
 ```
 
@@ -75,24 +75,37 @@ filesystem: a cold point lookup on a 134 MB database fetches 4 pages.
 
 With a Bee node (e.g. [Swarm Desktop](https://desktop.ethswarm.org/)) and
 a usable postage stamp — see the
-[User Guide](docs/USER_GUIDE.md) for stamp buying and sizing:
+[User Guide](docs/USER_GUIDE.md) for stamp buying and sizing. The demo
+above ran in RAM, so first materialize a database file to publish
+(or use your own SQLite file):
 
 ```bash
-swarmlite publish site.db --stamp <batchID>
-# warning: page_size was 8192; rewriting to 4096 ...   (checklist runs)
-# pin:  bzz://<root>/site.db
+python -c "import sys; sys.path.insert(0, 'examples');
+from offline_demo import build
+open('demo.db', 'wb').write(build(rows=30000))"
+
+swarmlite publish demo.db --name demo.db
+# pin:  bzz://<root>/demo.db      <- the 64-hex root hash is minted HERE
 ```
 
-No stamp yet? `swarmlite publish site.db --buy` prices a batch sized
+That printed root is the database's content address — save it; it is
+also re-derivable by publishing the identical file again. Then:
+
+```bash
+swarmlite query "bzz://<root>/demo.db" \
+    "SELECT title FROM posts WHERE id = 12345" --stats
+```
+
+No stamp yet? `swarmlite publish demo.db --buy` prices a batch sized
 for the file, shows the xBZZ cost, and buys it from the node's wallet.
 
 or with a stable, updatable URL (one upload advances a signed feed AND
 yields the pin):
 
 ```bash
-swarmlite publish site.db --feed mysite --signer <private key hex>
-# pin:  bzz://<root>/site.db
-# feed: bzzf://<owner>/mysite/site.db
+swarmlite publish demo.db --name demo.db --feed mysite --signer <private key hex>
+# pin:  bzz://<root>/demo.db
+# feed: bzzf://<owner>/mysite/demo.db
 ```
 
 ```python

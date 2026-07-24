@@ -52,7 +52,14 @@ def prepare(db_path: str | os.PathLike, out_path: str | os.PathLike) -> list[str
     """
     db_path, out_path = Path(db_path), Path(out_path)
     if not db_path.exists():
-        raise FileNotFoundError(db_path)
+        raise FileNotFoundError(
+            f"no such database file: '{db_path}' — publish uploads an "
+            f"existing local SQLite file. To try the flow with demo data, "
+            f"build one first:  python -c \"import sys; "
+            f"sys.path.insert(0, 'examples'); from offline_demo import "
+            f"build; open('demo.db', 'wb').write(build(rows=30000))\"  "
+            f"then publish demo.db"
+        )
     warnings: list[str] = []
 
     # backup-API copy: consistent even if the source is a live WAL db

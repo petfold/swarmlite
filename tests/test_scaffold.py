@@ -45,3 +45,9 @@ def test_cli_errors_are_one_line_not_tracebacks(capsys, monkeypatch):
     monkeypatch.setenv("SWARMLITE_DEBUG", "1")
     with pytest.raises(ValueError):
         main(["query", "bzz://nothex/demo.db", "SELECT 1"])
+
+
+def test_cli_publish_missing_file_says_how_to_get_one(capsys):
+    assert main(["publish", "site.db"]) == 1
+    err = capsys.readouterr().err
+    assert "no such database file" in err and "offline_demo" in err
