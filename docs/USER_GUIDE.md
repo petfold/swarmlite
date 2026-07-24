@@ -421,10 +421,29 @@ Measured live (Bee 2.8.1): cold point lookup **5 Range requests /
 database. `--rows` scales the demo data; `--api-url` targets another
 node.
 
+### The npm package (reader + publisher, no Python)
+
+`js/` is an npm-ready package named `swarmlite` — the browser/Node
+reader *plus* a pure-JS publisher, zero runtime dependencies. Once
+published to the registry (`cd js && npm publish`):
+
+```bash
+npm install swarmlite
+npx swarmlite publish site.db --feed mysite --signer <key hex>
+npx swarmlite query "bzz://<root>/site.db" "SELECT ..." --stats --verify
+```
+
+The JS publisher runs the same checklist in memory via wa-sqlite (WAL
+inputs are rejected with the one-line local fix), follows the same
+money rules (`--buy` shows cost and asks), and produces feed-update
+signatures **byte-identical** to the Python implementation's — the
+test suite asserts this against fixtures the Python side generates, so
+the two publishers are interchangeable mid-feed.
+
 ### Use the reader in your own page
 
 Copy `js/src/` and `js/vendor/` next to your page (that's the whole
-dependency tree), then:
+dependency tree — or `npm install swarmlite` in a bundled app), then:
 
 ```js
 import { open, resolveFeed } from './src/index.js';

@@ -150,8 +150,40 @@ against the 32-byte root in the URL.
       fix ported back (swarmfs commit `dd7def6`, DONE 2026-07-24,
       verified live against the redundancy-uploaded demo file).
 
+## v2.2 — JS-first packaging (npm + pure-JS publisher)
+
+Goal: a full-stack JS developer never needs Python (see
+`docs/ecosystem-strategy-qa.md` for the strategy behind this).
+
+- [x] Pure-JS publisher (DONE 2026-07-24): `js/src/prepare.js` runs the
+      whole checklist in memory on wa-sqlite via a writable MemVFS
+      (WAL inputs rejected with the one-line local fix, since the
+      in-memory VFS deliberately has no shared-memory support);
+      `js/src/publisher.js` does stamps (auto-select/plan/buy — same
+      money rules), POST /bzz upload, and signed feed updates whose
+      SOCs are **byte-identical** to swarmfs's (RFC 6979 determinism,
+      asserted against Python-generated fixtures). Signing uses noble's
+      signAsync over built-in WebCrypto — zero new dependencies.
+- [x] npm package `swarmlite` + CLI (DONE 2026-07-24): package.json
+      with exports/bin/files (25 files, ~479 kB tarball, all vendored
+      deps with LICENSE+PROVENANCE), `js/README.md` as the npm front
+      page, and `npx swarmlite publish|query` mirroring the Python CLI
+      (stdout=root, stderr=human lines, placeholder detection,
+      --verify). Live round-trip: JS publish (auto stamp) → JS verified
+      query → Python query of the same root. *Publishing to the
+      registry itself is a human step: `cd js && npm publish` (name is
+      free; needs npm login).*
+
+**Exit criterion: MET** — a JS developer can `npm i swarmlite` (once
+published) and read, verify, and publish without Python installed.
+
 ## Later / opportunistic
 
+- Cookbook: "publish your Postgres/MySQL as a Swarm read replica"
+  (ETL to SQLite + `--feed`), per the ecosystem strategy Q&A.
+- WordPress exporter demo (posts → site.db + static theme + search) —
+  the literal LAMP-migration story.
+- Mongo-flavored query facade over recordstore, if demand appears.
 - Readahead tuning; bundling hot top-level pages into one prefetch.
 - Cookbook doc: DuckDB-WASM + Parquet over swarmfs (works today, zero new
   code) — the analytics flavour.

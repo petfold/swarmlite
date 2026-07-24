@@ -1,13 +1,48 @@
 {
-  "name": "@swarmlite/reader",
-  "version": "0.1.0",
-  "description": "Lazy read-only SQLite over Swarm gateway range reads, for browsers (wa-sqlite VFS)",
+  "name": "swarmlite",
+  "version": "0.2.0",
+  "description": "Verifiable serverless SQLite on Ethereum Swarm: lazy SELECT over gateway range reads (browser and Node), client-side verification, and a pure-JS publisher",
   "type": "module",
   "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./publisher": "./src/publisher.js",
+    "./prepare": "./src/prepare.js",
+    "./verify": "./src/verify.js",
+    "./feeds": "./src/feeds.js"
+  },
+  "bin": {
+    "swarmlite": "bin/swarmlite.mjs"
+  },
+  "files": [
+    "src",
+    "vendor",
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/petfold/swarmlite.git",
+    "directory": "js"
+  },
+  "homepage": "https://github.com/petfold/swarmlite#readme",
+  "keywords": [
+    "swarm",
+    "ethswarm",
+    "sqlite",
+    "wasm",
+    "serverless",
+    "decentralized",
+    "web3",
+    "vfs",
+    "content-addressed"
+  ],
   "license": "BSD-3-Clause",
   "author": "Peter Foldiak",
   "scripts": {
-    "test": "node test/feed.mjs && node test/verify.mjs",
+    "test": "node test/feed.mjs && node test/verify.mjs && node test/publish.mjs",
     "smoke": "node test/smoke.mjs",
     "serve": "node test/serve.mjs"
   }

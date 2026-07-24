@@ -126,12 +126,23 @@ URL forms: `bzz://<root>/site.db` pins an immutable version;
 `memory://` work too (tests, local use). Connections are strictly
 read-only — DML raises `apsw.ReadOnlyError`.
 
-### In the browser
+### In JavaScript (browser and Node)
 
-The same lazy-page trick runs inside SQLite-WASM (`js/`, vendored
-wa-sqlite): a static page, the reader, the wasm engine and the database
-all publish under **one immutable Swarm root** — a multi-GB dataset
-behind a static site, no server, nothing to install for readers.
+The same lazy-page trick runs inside SQLite-WASM (`js/`, an npm-ready
+package named `swarmlite` — reader *and* pure-JS publisher, zero
+runtime dependencies): a static page, the reader, the wasm engine and
+the database all publish under **one immutable Swarm root** — a
+multi-GB dataset behind a static site, no server, nothing to install
+for readers. Full-stack JS developers never need the Python side:
+
+```bash
+npx swarmlite publish site.db --feed mysite --signer <key hex>
+npx swarmlite query "bzz://<root>/site.db" "SELECT ..." --stats --verify
+```
+
+Feed signatures are byte-identical across the two implementations
+(asserted against shared fixtures), so JS and Python publishers are
+fully interchangeable.
 
 ```bash
 python js/demo/publish_site.py --stamp <batchID>
