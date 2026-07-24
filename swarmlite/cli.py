@@ -30,6 +30,43 @@ def _reject_placeholders(**values: str | None) -> None:
             )
 
 
+def _stamp_error() -> type[Exception]:
+    from swarmfs.exceptions import StampError
+
+    return StampError
+
+
+def _buy_stamp(args: argparse.Namespace) -> str:
+    """Plan, confirm, and buy a batch sized for the file. Returns the
+    usable batch id."""
+    from .stamps import buy_batch, parse_ttl, plan_batch
+
+    if args.stamp != "auto":
+        raise ValueError("--buy and --stamp are mutually exclusive — "
+                         "--buy always purchases a fresh batch")
+    size = os.path.getsize(args.db_path)
+    api_url = args.api_url or os.environ.get("BEE_API_URL") or "http://localhost:1633"
+    plan = plan_batch(size, parse_ttl(args.ttl), api_url)
+    print(
+        f"batch for {size / 2**20:.1f} MB: depth {plan.depth}, "
+        f"amount {plan.amount}, lasting ~{plan.ttl_secs / 3600:.0f} h "
+        f"-> {plan.cost_bzz:.4f} xBZZ from the node's wallet",
+        file=sys.stderr,
+    )
+    if not args.yes:
+        if not sys.stdin.isatty():
+            raise ValueError(
+                "--buy needs an interactive terminal to confirm the "
+                "purchase; pass --yes to skip the prompt"
+            )
+        if input("buy it? [y/N] ").strip().lower() not in ("y", "yes"):
+            raise ValueError("purchase declined; nothing was bought")
+    print("buying (waits for on-chain confirmation) ...", file=sys.stderr)
+    stamp = buy_batch(api_url, plan.amount, plan.depth)
+    print(f"bought batch {stamp}", file=sys.stderr)
+    return stamp
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         return _run(argv)
@@ -57,6 +94,20 @@ def _run(argv: list[str] | None = None) -> int:
     )
     p_pub.add_argument("--stamp", default="auto")
     p_pub.add_argument("--api-url", dest="api_url")
+    p_pub.add_argument(
+        "--buy", action="store_true",
+        help="buy a new postage batch sized for the file from the node's "
+        "wallet (shows the xBZZ cost and asks first)",
+    )
+    p_pub.add_argument(
+        "--ttl", default="1d",
+        help="how long the bought batch should last, e.g. 36h/7d/4w "
+        "(default 1d; the node enforces a 24h minimum)",
+    )
+    p_pub.add_argument(
+        "--yes", action="store_true",
+        help="skip the purchase confirmation (for non-interactive use)",
+    )
 
     p_q = sub.add_parser("query", help="run SQL against a published database")
     p_q.add_argument("url", help="bzz://<ref>/file.db or bzzf://<owner>/<topic>")
@@ -81,10 +132,21 @@ def _run(argv: list[str] | None = None) -> int:
             db_path=args.db_path, name=args.name, feed=args.feed,
             signer=args.signer, stamp=args.stamp, api_url=args.api_url,
         )
-        root = publish(
-            args.db_path, name=args.name, feed=args.feed,
-            signer=args.signer, stamp=args.stamp, api_url=args.api_url,
-        )
+        stamp = args.stamp
+        if args.buy:
+            stamp = _buy_stamp(args)
+        try:
+            root = publish(
+                args.db_path, name=args.name, feed=args.feed,
+                signer=args.signer, stamp=stamp, api_url=args.api_url,
+            )
+        except _stamp_error() as e:
+            raise type(e)(
+                f"{e} — or let swarmlite buy one sized for the file: "
+                f"re-run with --buy (spends the node wallet's xBZZ; "
+                f"services such as Beeport sell stamps if the wallet "
+                f"has none)"
+            ) from None
         print(root)
         return 0
 

@@ -64,7 +64,7 @@ python3 -m venv .venv && source .venv/bin/activate
 git clone https://github.com/petfold/swarmfs ../swarmfs   # until it's on PyPI
 pip install -e ../swarmfs -e ".[test]"
 
-pytest                           # 29 tests, no node needed
+pytest                           # 37 tests, no node needed
 python examples/offline_demo.py  # the demo, offline — no node, no funds
 ```
 
@@ -82,6 +82,9 @@ swarmlite publish site.db --stamp <batchID>
 # warning: page_size was 8192; rewriting to 4096 ...   (checklist runs)
 # pin:  bzz://<root>/site.db
 ```
+
+No stamp yet? `swarmlite publish site.db --buy` prices a batch sized
+for the file, shows the xBZZ cost, and buys it from the node's wallet.
 
 or with a stable, updatable URL (one upload advances a signed feed AND
 yields the pin):

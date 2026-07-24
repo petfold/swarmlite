@@ -76,7 +76,7 @@ pip install -e ../swarmfs -e ".[test]"
 Verify:
 
 ```bash
-pytest                          # 29 tests, no node needed
+pytest                          # 37 tests, no node needed
 python examples/offline_demo.py # the demo of §4, offline
 swarmlite --help
 ```
@@ -97,7 +97,30 @@ Look for `"usable": true` **and** `"utilizationRatio"` well below 1 — an
 immutable batch at ratio 1.0 is full and further uploads with it fail
 (swarmlite/swarmfs will tell you: `full (utilization at 100%)`).
 
-### Buying a batch
+### Letting swarmlite buy one
+
+No usable stamp? `publish` can buy a batch sized for your file from the
+node's wallet — it shows the exact cost and asks first:
+
+```bash
+swarmlite publish site.db --buy
+# batch for 41.9 MB: depth 18, amount 1225476000, lasting ~25 h
+#   -> 0.0321 xBZZ from the node's wallet
+# buy it? [y/N] y
+# buying (waits for on-chain confirmation) ...
+# bought batch 645b8538...
+# pin:  bzz://<root>/site.db
+```
+
+`--ttl` takes `36h`/`7d`/`4w` (default `1d`; the chain enforces a 24 h
+minimum, so short TTLs are rounded up). `--yes` skips the prompt for
+scripts. The purchase waits (~40 s live) for on-chain confirmation
+before uploading. Requires xBZZ (and a little xDAI for gas) in the
+node's wallet — check `curl -s http://localhost:1633/wallet`; if it's
+empty, fund it or get a stamp from a service such as Beeport and pass
+it with `--stamp`.
+
+### Buying a batch by hand
 
 ```bash
 curl -s -X POST "http://localhost:1633/stamps/<amount>/<depth>"
