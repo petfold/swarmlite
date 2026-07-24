@@ -99,11 +99,14 @@ methods, so no COOP/COEP headers): pages fetched via a gateway's HTTP
 range reads. Precedent: phiresky's `sql.js-httpvfs` (HTTP ranges against
 static hosting) — it transplanted almost perfectly; the additions are
 feed resolution (`resolveFeed`: Bee returns the reference in the /feeds
-Etag) and, still to come, client-side chunk verification for untrusted
-gateways (a local light node verifies natively). Resulting shape, live
-since 2026-07-24: HTML + JS + wasm + database served from one immutable
-Swarm root, data queried client-side — a multi-GB dataset behind a
-static site, no origin server.
+Etag) and client-side verification for untrusted gateways
+(`verify: true`: Mantaray resolved client-side, pages read
+chunk-by-chunk with BMT checks, feed updates signature-verified; a
+local light node verifies natively, so the fast Range path stays the
+default). Resulting shape, live since 2026-07-24: HTML + JS + wasm +
+database served from one immutable Swarm root, data queried
+client-side — a multi-GB dataset behind a static site, no origin
+server, and no trust in the server there is.
 
 Lives in `js/`, fully vendored (a Swarm-publishable page can't use a
 CDN or npm); the Python package does not depend on it.

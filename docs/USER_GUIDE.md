@@ -409,8 +409,23 @@ Topics are hashed exactly like the Python side, so whatever
   The smoke test asserts correctness AND the read budget; point it at
   the live `db:` URL from `publish_site.py` for the gateway version.
 - **Verification:** against your local light node, the node itself
-  verifies every retrieved chunk. Client-side BMT verification (for
-  untrusted gateways) is on the roadmap under "Later".
+  verifies every retrieved chunk — the default fast path is already
+  trustworthy there. Reading through an **untrusted gateway** (someone
+  else's node, a public gateway), pass `verify: true`:
+
+  ```js
+  const db = await open(`${gw}/bzz/${root}/site.db`, { verify: true });
+  const { reference } = await resolveFeed(gw, owner, topic, { verify: true });
+  ```
+
+  Every byte is then checked against the 32-byte root in the URL: the
+  manifest is resolved client-side, pages are fetched chunk-by-chunk
+  and BMT-verified, and feed updates get full signature verification —
+  a tampering gateway is caught on the first bad chunk, a forged feed
+  on the signature. Cost: one request per 4 KB chunk plus verified
+  tree/manifest chunks (measured live: point lookup 5 pages via 13
+  chunks / 45 KB; roughly 2× the requests of the fast path). What it
+  cannot prove: that a feed update is the *latest* one.
 
 ## 8. Patterns for applications
 

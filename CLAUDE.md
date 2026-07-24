@@ -89,8 +89,13 @@ the feed URL.
   (browser) under `js/` (vendored wa-sqlite Asyncify build); `resolveFeed`
   via the gateway's `/feeds` Etag; self-contained demo site (page +
   reader + wasm + DB under one immutable root) published and measured
-  live. Chunk verification deferred to Later (local light node verifies;
-  client-side BMT is for untrusted gateways).
+  live.
+- **v2.1 (DONE 2026-07-24)** — client-side verification for untrusted
+  gateways: `open(url, {verify: true})` (Mantaray + BMT tree walk over
+  `/chunks`, ports of swarmfs held byte-compatible by swarmfs-generated
+  fixtures) and `resolveFeed(..., {verify: true})` (SOC signature
+  recovery, vendored noble-secp256k1). Known follow-up: port the
+  erasure-coding fanout fix back to swarmfs `join.py`.
 - Later — readahead tuning, hot-page bundling, DuckDB cookbook doc,
   FTS5 demo site.
 

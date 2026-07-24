@@ -123,7 +123,10 @@ python js/demo/publish_site.py --stamp <batchID>
 Measured live: a cold point lookup fetched 5 pages (20 KB) of a 41.9 MB
 database; a whole 4-query session 23 pages (92 KB). Feeds resolve in the
 browser too (`resolveFeed`), so the page can always show the latest
-published snapshot. User Guide §7 has the details.
+published snapshot. Against an untrusted gateway, `verify: true` checks
+every byte client-side against the 32-byte root (BMT per chunk,
+signature recovery per feed update) — a tampering gateway is caught on
+the first bad chunk. User Guide §7 has the details.
 
 ## What this is not
 

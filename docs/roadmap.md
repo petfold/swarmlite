@@ -116,11 +116,43 @@ live gateway; all site assets serve with correct MIME types incl.
 eyeballed). Demo root (2026-07-24):
 `5ac6a781227c7481bbc8da9bc0e9abb87179f8c542c764acdcaa72806d8634da`.
 
+## v2.1 — client-side verification (JS)
+
+Goal: trustless reads through an UNTRUSTED gateway — every byte checked
+against the 32-byte root in the URL.
+
+- [x] BMT + verified joiner + Mantaray lookup (DONE 2026-07-24):
+      `js/src/verify.js` (chunk addressing, verifying chunk store over
+      `/chunks`, range-descending tree reader) and `js/src/mantaray.js`
+      (manifest path resolution) — read-only ports of swarmfs
+      `bmt.py`/`join.py`/`mantaray/`, held byte-compatible by fixtures
+      that swarmfs GENERATES (`js/test/make_fixtures.py` →
+      `js/test/fixtures/verified.json`).
+- [x] `open(url, {verify: true})` (DONE 2026-07-24): resolves the
+      manifest client-side and reads pages chunk-by-chunk, each
+      BMT-verified. Live: point lookup 5 pages via 13 verified chunks
+      (45 KB) of 41.9 MB; a 4-query session 19 pages / 31 chunks /
+      113 KB. Cost model: one request per 4 KB chunk + tree/manifest
+      overhead (~2× the fast path's requests) — use against public
+      gateways; a local light node verifies natively, keep the default
+      Range path there.
+- [x] `resolveFeed(..., {verify: true})` (DONE 2026-07-24): takes only
+      the update *index* from the gateway, derives the SOC address
+      itself, fetches the chunk and verifies address derivation +
+      owner-signature recovery (vendored @noble/secp256k1 2.3.0).
+      Latestness remains unprovable client-side (as in swarmfs).
+      Offline forged-signature/wrong-owner tests + live round-trip.
+- [x] Erasure-coding discovery (2026-07-24): redundancy-uploaded files
+      have intermediate chunks with FEWER than 128 data refs (seen
+      live: 107 data + 21 parity). The JS walker infers the per-child
+      unit from the first child's own span instead of 128^k position
+      math. **swarmfs `join.py` has the same 128-fanout assumption and
+      would fail on such files — port this fix back to swarmfs.**
+
 ## Later / opportunistic
 
-- Client-side verification in JS for untrusted gateways: BMT/chunk
-  inclusion per page, SOC signature check in `resolveFeed` (mirror
-  swarmfs `verify_soc`). keccak256 already vendored (js-sha3).
+- Port the erasure-coding tree-walk fix (v2.1, last item) back to
+  swarmfs `join.py`, with a redundancy-uploaded live test.
 - Readahead tuning; bundling hot top-level pages into one prefetch.
 - Cookbook doc: DuckDB-WASM + Parquet over swarmfs (works today, zero new
   code) — the analytics flavour.

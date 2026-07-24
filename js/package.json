@@ -7,7 +7,7 @@
   "license": "BSD-3-Clause",
   "author": "Peter Foldiak",
   "scripts": {
-    "test": "node test/feed.mjs",
+    "test": "node test/feed.mjs && node test/verify.mjs",
     "smoke": "node test/smoke.mjs",
     "serve": "node test/serve.mjs"
   }

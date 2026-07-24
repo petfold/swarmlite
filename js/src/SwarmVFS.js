@@ -33,6 +33,8 @@ export class SwarmVFS extends VFS.Base {
   #files = new Map();
   /** @type {Map<string, string>} short alias -> URL */
   #urls = new Map();
+  /** @type {Map<string, object>} short alias -> {size, read} source */
+  #sources = new Map();
   #cachePages;
   #fetch;
 
@@ -50,29 +52,44 @@ export class SwarmVFS extends VFS.Base {
     this.#urls.set(alias, url);
   }
 
+  /** Map an alias to a custom page source instead of a URL:
+   * `{ size, read(from, toInclusive) -> Promise<Uint8Array> }`. Used
+   * for verified reads, where pages come from a chunk-tree walk rather
+   * than gateway Range requests. */
+  registerSource(alias, source) {
+    this.#sources.set(alias, source);
+  }
+
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       if (!(flags & VFS.SQLITE_OPEN_MAIN_DB)) {
         return VFS.SQLITE_CANTOPEN; // no journals, no temp files
       }
+      const source = this.#sources.get(name);
       const url = this.#urls.get(name) ?? name;
       try {
-        // one 1-byte range read: existence check + total size
-        const resp = await this.#fetch(url, {
-          headers: { Range: 'bytes=0-0' },
-        });
-        const size = contentRangeTotal(resp);
-        if (size === null) {
-          console.error(
-            `swarmlite: ${url} -> HTTP ${resp.status}, ` +
-            `Content-Range ${resp.headers.get('content-range')} — ` +
-            `need a gateway URL with Range support`,
-          );
-          return VFS.SQLITE_CANTOPEN;
+        let size;
+        if (source) {
+          size = source.size;
+        } else {
+          // one 1-byte range read: existence check + total size
+          const resp = await this.#fetch(url, {
+            headers: { Range: 'bytes=0-0' },
+          });
+          size = contentRangeTotal(resp);
+          if (size === null) {
+            console.error(
+              `swarmlite: ${url} -> HTTP ${resp.status}, ` +
+              `Content-Range ${resp.headers.get('content-range')} — ` +
+              `need a gateway URL with Range support`,
+            );
+            return VFS.SQLITE_CANTOPEN;
+          }
         }
         this.#files.set(fileId, {
           alias: name,
           url,
+          source,
           size,
           cache: new Map(), // page index -> Uint8Array (Map keeps LRU order)
           stats: { readCount: 0, pagesFetched: 0, bytesFetched: 0, fileSize: size },
@@ -215,7 +232,9 @@ export class SwarmVFS extends VFS.Base {
       while (j <= last && !pages.has(j) && j - i < MAX_RUN_PAGES) j++;
       const from = i * PAGE_SIZE;
       const to = Math.min(j * PAGE_SIZE, file.size) - 1;
-      const blob = await this.#fetchRange(file.url, from, to);
+      const blob = file.source
+        ? await file.source.read(from, to)
+        : await this.#fetchRange(file.url, from, to);
       file.stats.readCount += 1;
       file.stats.bytesFetched += blob.byteLength;
       for (let k = i; k < j; k++) {
