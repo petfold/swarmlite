@@ -99,8 +99,8 @@ swarmlite query "bzz://<root>/demo.db" \
 No stamp yet? `swarmlite publish demo.db --buy` prices a batch sized
 for the file, shows the xBZZ cost, and buys it from the node's wallet.
 
-or with a stable, updatable URL (one upload advances a signed feed AND
-yields the pin):
+For a stable, updatable URL, publish into a feed instead (one upload
+advances the signed feed AND yields the pin):
 
 ```bash
 swarmlite publish demo.db --name demo.db --feed mysite --signer <private key hex>
@@ -111,7 +111,7 @@ swarmlite publish demo.db --name demo.db --feed mysite --signer <private key hex
 ```python
 import swarmlite
 
-con = swarmlite.connect(f"bzz://{root}/site.db")
+con = swarmlite.connect(f"bzz://{root}/demo.db")
 rows = list(con.execute("SELECT ... "))
 print(con.swarmlite_file.stats())   # pages/bytes fetched vs. file size
 ```
