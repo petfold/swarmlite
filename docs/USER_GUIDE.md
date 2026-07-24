@@ -216,6 +216,38 @@ see; every previous pin keeps working (free snapshots).
 Same thing from Python: `swarmlite.publish("site.db", feed="mysite",
 signer=key, stamp="<batchID>") -> root`.
 
+### Updating a published database (yes, UPDATE works — locally)
+
+The write cycle is: edit the local file with ordinary SQL, republish.
+Run live while writing this section:
+
+```bash
+# 1. write with any tool — it's just a local SQLite file
+sqlite3 demo.db "UPDATE posts SET title = 'Post 12345: revised' WHERE id = 12345"
+
+# 2. republish: the changed content gets a NEW immutable root
+swarmlite publish demo.db
+# pin:  bzz://00c929ed.../demo.db     (the old root keeps working!)
+
+# 3. both versions now coexist, permanently addressable:
+swarmlite query "bzz://8597aa78.../demo.db" "SELECT title FROM posts WHERE id = 12345"
+# Post 12345: on page                  <- the old snapshot, untouched
+swarmlite query "bzz://00c929ed.../demo.db" "SELECT title FROM posts WHERE id = 12345"
+# Post 12345: revised                  <- the new one
+```
+
+An `UPDATE` can never produce the *same* `bzz://` URL — the root is the
+hash of the content, so changed bytes mean a changed address. That is
+what feeds are for: publish with `--feed mysite` each time, and the
+stable `bzzf://<owner>/mysite/demo.db` URL always resolves to the
+newest root while every older pin remains valid (version history for
+free). Re-publishing an *unchanged* file re-derives the identical root
+— publishing is idempotent.
+
+Deleting is the same story: you can stop referencing a root, and it
+expires with its stamp, but you cannot recall bytes others may have
+pinned. Publish accordingly.
+
 ### What the checklist does, and why (manual version)
 
 If you prefer to prepare the file yourself:
