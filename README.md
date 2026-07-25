@@ -58,11 +58,16 @@ permanence.)
 ## Quick start
 
 ```bash
+pip install swarmlite            # PyPI: pulls swarmfs automatically
+```
+
+or for development:
+
+```bash
 git clone https://github.com/petfold/swarmlite
 cd swarmlite
 python3 -m venv .venv && source .venv/bin/activate
-git clone https://github.com/petfold/swarmfs ../swarmfs   # until it's on PyPI
-pip install -e ../swarmfs -e ".[test]"
+pip install -e ".[test]"
 
 pytest                           # 45 tests, no node needed
 python examples/offline_demo.py  # the demo, offline — no node, no funds

@@ -64,13 +64,17 @@ swarmlite finds the node the same way swarmfs does: an explicit
 ## 2. Installation
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install swarmlite            # pulls swarmfs from PyPI automatically
+```
+
+or, for development, from a clone:
+
+```bash
 git clone https://github.com/petfold/swarmlite
 cd swarmlite
 python3 -m venv .venv && source .venv/bin/activate
-
-# until swarmfs is on PyPI, install it from a local checkout first:
-git clone https://github.com/petfold/swarmfs ../swarmfs
-pip install -e ../swarmfs -e ".[test]"
+pip install -e ".[test]"
 ```
 
 Verify:
