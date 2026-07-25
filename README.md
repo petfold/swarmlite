@@ -133,9 +133,9 @@ read-only — DML raises `apsw.ReadOnlyError`.
 
 ### In JavaScript (browser and Node)
 
-The same lazy-page trick runs inside SQLite-WASM (`js/`, an npm-ready
-package named `swarmlite` — reader *and* pure-JS publisher, zero
-runtime dependencies): a static page, the reader, the wasm engine and
+The same lazy-page trick runs inside SQLite-WASM.
+[`npm install swarmlite`](https://www.npmjs.com/package/swarmlite) gets
+the reader *and* a pure-JS publisher, zero runtime dependencies: a static page, the reader, the wasm engine and
 the database all publish under **one immutable Swarm root** — a
 multi-GB dataset behind a static site, no server, nothing to install
 for readers. Full-stack JS developers never need the Python side:
