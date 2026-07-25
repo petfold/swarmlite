@@ -423,9 +423,9 @@ node.
 
 ### The npm package (reader + publisher, no Python)
 
-`js/` is an npm-ready package named `swarmlite` — the browser/Node
-reader *plus* a pure-JS publisher, zero runtime dependencies. Once
-published to the registry (`cd js && npm publish`):
+`js/` is published on npm as [`swarmlite`](https://www.npmjs.com/package/swarmlite)
+— the browser/Node reader *plus* a pure-JS publisher, zero runtime
+dependencies:
 
 ```bash
 npm install swarmlite
