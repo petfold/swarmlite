@@ -113,8 +113,9 @@ Goal: the same lazy-page trick inside SQLite-WASM in a browser.
 **Exit criterion: MET** — measured via the Node smoke test against the
 live gateway, and confirmed in a real browser (Brave, 2026-07-24):
 posts load, keyword search works, the status line reports per-query
-page counts. Demo root:
-`5ac6a781227c7481bbc8da9bc0e9abb87179f8c542c764acdcaa72806d8634da`.
+page counts. Live demo root (republished 2026-07-25 on a 28-day
+batch, now shipping the verified reader):
+`d1d54686def7f40714d093f2d8c4a2739d6d905d16b834b41f04b7128be8690b`.
 
 ## v2.1 — client-side verification (JS)
 
