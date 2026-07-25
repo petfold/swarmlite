@@ -180,14 +180,18 @@ published) and read, verify, and publish without Python installed.
 
 ## Later / opportunistic
 
-- Cookbook: "publish your Postgres/MySQL as a Swarm read replica"
-  (ETL to SQLite + `--feed`), per the ecosystem strategy Q&A.
+- [x] Cookbook: Postgres/MySQL read replica (DONE 2026-07-25,
+      `docs/cookbook-read-replica.md`) — DB-API materializer verified
+      end-to-end: 50 k-row source → 3.0 MB replica → published →
+      queried at 10 pages / 40 KB.
+- [x] Cookbook: DuckDB + Parquet analytics (DONE 2026-07-25,
+      `docs/cookbook-duckdb-parquet.md`) — 1 M rows published live
+      (5.0 MB, 20 row groups): count(*) = 16 KB, pruned week filter =
+      214 KB, full columnar aggregate = 3.9 MB.
 - WordPress exporter demo (posts → site.db + static theme + search) —
   the literal LAMP-migration story.
 - Mongo-flavored query facade over recordstore, if demand appears.
 - Readahead tuning; bundling hot top-level pages into one prefetch.
-- Cookbook doc: DuckDB-WASM + Parquet over swarmfs (works today, zero new
-  code) — the analytics flavour.
 - recordstore → `site.db` materialization example (datacat pattern).
 - Multi-author example: per-author feeds, publisher merges via
   recordstore `reconcile`.

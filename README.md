@@ -178,8 +178,10 @@ the first bad chunk. User Guide §7 has the details.
 - [recordstore](https://github.com/petfold/recordstore) — versioned
   key→record store; the natural system of record that a published
   `site.db` is materialized from.
-- DuckDB-WASM + Parquet over range requests — the analytics flavour of
-  the same trick; works today via swarmfs with no new code.
+- DuckDB + Parquet over range requests — the analytics flavour of the
+  same trick: [cookbook](docs/cookbook-duckdb-parquet.md) with live
+  measurements. And your Postgres/MySQL can feed all of this — the
+  [read-replica cookbook](docs/cookbook-read-replica.md) shows how.
 
 ## License
 
