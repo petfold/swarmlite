@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "swarmlite"
-version = "0.1.0"
+version = "0.2.0"
 description = "Verifiable serverless SQLite hosting on Ethereum Swarm: a read-only VFS over swarmfs plus a publish helper"
 readme = "README.md"
 requires-python = ">=3.11"
