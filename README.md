@@ -104,6 +104,11 @@ swarmlite query "bzz://<root>/demo.db" \
 No stamp yet? `swarmlite publish demo.db --buy` prices a batch sized
 for the file, shows the xBZZ cost, and buys it from the node's wallet.
 
+Migrating a blog? `examples/wordpress/` turns a standard WordPress
+export (Tools → Export) into a searchable blog under one Swarm root —
+list, search, and every post page are queries against one published
+file.
+
 If the data will ever change, publish into a feed from the first
 version — the same single upload advances the signed feed AND yields
 the pin, and readers get a stable URL from day one:

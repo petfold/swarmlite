@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blog on Swarm</title>
+<style>
+  :root {
+    --ink: #22371e; --slate: #5f6d58; --accent: #cf5c36;
+    --pale: #e6ecdf; --bg: #fbfcf8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #e2ead9; --slate: #9aa892; --pale: #2b3626; --bg: #171c13; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; max-width: 42rem; padding: 2rem 1.2rem 4rem;
+    font: 17px/1.6 Georgia, 'Times New Roman', serif; color: var(--ink);
+    background: var(--bg);
+  }
+  header h1 { font-size: 1.7rem; margin: 0; }
+  header h1 a { color: inherit; text-decoration: none; }
+  header h1::after { content: ""; display: block; width: 7rem; height: 3px;
+    background: var(--accent); margin-top: .4rem; }
+  .sub { color: var(--slate); font-size: .85rem; font-family: system-ui, sans-serif;
+    margin: .4rem 0 1.6rem; }
+  #search { width: 100%; padding: .55rem .8rem; font-size: 1rem;
+    font-family: system-ui, sans-serif;
+    border: 1.5px solid var(--slate); border-radius: 6px;
+    background: var(--bg); color: var(--ink); margin-bottom: .4rem; }
+  #search:focus { outline: none; border-color: var(--accent); }
+  #status { font-size: .8rem; color: var(--slate); min-height: 1.3em;
+    font-family: system-ui, sans-serif; margin-bottom: 1.2rem; }
+  #status b { color: var(--accent); }
+  .item { padding: .6rem 0; border-bottom: 1px solid var(--pale); }
+  .item a { color: var(--ink); font-weight: 600; text-decoration: none; }
+  .item a:hover { color: var(--accent); }
+  .item .m { color: var(--slate); font-size: .8rem; font-family: system-ui, sans-serif; }
+  article h2 { margin-top: 0; }
+  article img { max-width: 100%; }
+  .back { font-family: system-ui, sans-serif; font-size: .85rem; }
+  .back a, footer a { color: var(--accent); }
+  footer { margin-top: 3rem; font-size: .78rem; color: var(--slate);
+    font-family: system-ui, sans-serif; }
+</style>
+</head>
+<body>
+  <header>
+    <h1><a href="#/" id="blogtitle">…</a></h1>
+    <p class="sub">Exported from WordPress. Hosted on Swarm. Served by no one:
+      every page below is a <code>SELECT</code> against one published file.</p>
+  </header>
+  <input id="search" type="search" autocomplete="off" placeholder="search posts…">
+  <div id="status">opening database…</div>
+  <main id="main"></main>
+  <footer>
+    Migrated with the swarmlite WordPress exporter —
+    <a href="https://github.com/petfold/swarmlite">github.com/petfold/swarmlite</a>
+  </footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

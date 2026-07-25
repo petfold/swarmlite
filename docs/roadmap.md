@@ -188,8 +188,15 @@ published) and read, verify, and publish without Python installed.
       `docs/cookbook-duckdb-parquet.md`) — 1 M rows published live
       (5.0 MB, 20 row groups): count(*) = 16 KB, pruned week filter =
       214 KB, full columnar aggregate = 3.9 MB.
-- WordPress exporter demo (posts → site.db + static theme + search) —
-  the literal LAMP-migration story.
+- [x] WordPress exporter demo (DONE 2026-07-25,
+      `examples/wordpress/`): standard WXR export → `blog.db` (posts +
+      body-word covering index) + a static theme where the index,
+      search, and every post page are SELECTs against the one published
+      file. Sample-blog generator + offline tests (pages/drafts
+      skipped, read budgets); published live — 48 posts, whole
+      browse-and-read session 16 pages / 64 KB. `--feed` keeps one URL
+      across re-exports. Follow-up out of scope: mirroring media into
+      the manifest.
 - Mongo-flavored query facade over recordstore, if demand appears.
 - Readahead tuning; bundling hot top-level pages into one prefetch.
 - recordstore → `site.db` materialization example (datacat pattern).
