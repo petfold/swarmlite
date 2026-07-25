@@ -1,0 +1,24 @@
+name: Release to PyPI
+
+# Token-less publishing via PyPI Trusted Publishers: PyPI trusts this
+# exact repo+workflow (configured at pypi.org/manage/account/publishing/),
+# so no credentials are stored anywhere. Trigger manually from the
+# Actions tab (or `gh workflow run release.yml`).
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # the OIDC handshake with PyPI
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build && python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1
