@@ -202,3 +202,180 @@ demos. But when we look up from that, the natural next artifacts are:
 the route-planning demo (flagship for tier 1), the "single-writer shop"
 cookbook with feed-as-ledger (tier 2), and eventually a
 contract-plus-indexer reference for contested booking (tier 3).
+
+---
+
+**Question (Peter):**
+
+> To replace the web (and even non-web internet), it would be important
+> to know what are the significant parts of it today. How do we even
+> measure it? Big-tech (Amazon, Meta, Microsoft coulds and user facing
+> services come to mind, social media in general and the big AI firms)
+> come to mind as big but what would be a true measure of what counts
+> as the most significant, biggest part of the internet. Could it be
+> measured by bandwidth, traffic, human hours spent, use by AIs, or
+> even just what people (and AI agents) know and care about. What would
+> be the best parts to target? Various limitations ae coming into force
+> (age/ID checks, firewalls, various restrictions) , which may make the
+> Swarm Web3 ever more important.
+
+**Answer (Claude):**
+
+This one's worth answering carefully, because the different measures
+don't just give different sizes — they describe *different internets*,
+and picking the wrong one would aim the whole project at the wrong
+target.
+
+**The measures, and what each actually captures (rough shapes as of my
+knowledge, which ends early 2026):**
+
+- **By bytes/bandwidth**, the internet is a video pipe. Streaming video
+  is on the order of two-thirds of all traffic (YouTube, Netflix,
+  TikTok, plus adult content); add gaming downloads and OS updates and
+  there's little left. The entire *textual* web — everything anyone has
+  ever written — is a rounding error next to one evening of global
+  Netflix.
+- **By human hours**, it's feeds and chats: short video, social media,
+  messaging. Attention lives almost entirely inside a half-dozen apps.
+- **By money**, it's three overlapping machines: cloud B2B
+  (AWS/Azure/GCP running everyone's backends), e-commerce/payments, and
+  the advertising duopoly that funds the "free" layer.
+- **By what is *known*** — mindshare, citations, and increasingly what
+  AI models learn and retrieve — it's a completely different, much
+  smaller web: Wikipedia, documentation, forums, news archives,
+  scientific papers, code, maps, public records. Call it the
+  **reference web**. It's negligible by bytes and modest by hours, but
+  it is overwhelmingly what humans consult when they want to *know*
+  something, and it's what LLM training and retrieval weight most
+  heavily. TikTok contributes almost nothing to what an AI knows; Stack
+  Overflow and Wikipedia contribute enormously.
+- **By machine usage**, a structural shift is underway: bot and crawler
+  traffic now rivals or exceeds human web requests, and AI agents are
+  becoming a primary *reader* of the web — one that doesn't watch ads,
+  which quietly breaks the economic model funding the human web.
+
+**Which measure should we optimize for?** Not raw size — *value per
+byte times how badly the current architecture serves it*. Video is the
+biggest thing on the internet and the worst target: technically
+well-served by CDNs, economically locked by licensing and DRM, and
+contention-free anyway. Social feeds own attention but sit high on our
+contention ladder and behind network effects. The reference web,
+though, scores maximum on every axis that favors us: it's read-mostly
+(our architecture, exactly), high value per byte, *small enough to
+actually host* (all of Wikipedia is ~100 GB; the meaningful text web is
+terabytes, not the exabytes of video), it suffers acutely from link
+rot, paywalls, platform deletions and censorship — and it's the layer
+whose durability matters more every year that AI mediates human
+knowledge. Whoever is the substrate of record for the reference web has
+leverage wildly disproportionate to its byte count.
+
+**Your restrictions point is, I think, the strongest tailwind, and it
+cuts twice.** From one side, states are enclosing access: age/ID
+verification laws, national firewalls, takedown regimes — turning the
+open web into a checkpoint web where reading requires identifying
+yourself. From the other side, platforms are enclosing content *against
+machines*: anti-crawl walls, pay-per-crawl schemes, API lockdowns. The
+open web is being squeezed from both ends, and both squeezes create
+constituencies for content-addressed storage: publishers who need
+durable, uncensorable publication, and AI systems that need a
+verifiable, legally clean data commons. Note also that Swarm's
+economics fit the agentic web better than advertising does: stamps mean
+content is *paid at the source* to exist, so it doesn't matter whether
+the reader is a human who might see an ad or an agent that never will.
+Content addresses have one more property tailor-made for the AI era: a
+`bzz://` reference is a **citation that cannot rot or be silently
+edited** — grounding and provenance for machine knowledge, which no URL
+can honestly promise.
+
+**So the target list, in order:**
+
+1. **The reference web as archive**: Wikipedia and documentation
+   mirrors, scientific papers and datasets, news archives, public
+   records, OpenStreetMap data. All read-mostly, all high-mindshare,
+   all publishable with what we've already built. The slogan writes
+   itself: *the web that AI reads, made permanent and verifiable.*
+2. **The independent long tail**: blogs and small sites (the
+   WordPress-exporter path) — they die of hosting costs and bit rot,
+   and permanence-for-a-stamp is a real pitch.
+3. **Data for agents**: structured datasets with verifiable
+   provenance — swarmlite/recordstore as the retrieval substrate,
+   content addresses as citations.
+4. Then up the contention ladder as before: social (a person's posts
+   are *literally* a feed — our primitive; the hard part is aggregation
+   and discovery), and commerce/booking at the contract-arbitrated top.
+
+And to your "how do we even measure it" — I'd propose the project's
+north-star metric be neither bytes nor hours but something like
+**verifiable citation share**: of the things people and AIs actually
+consult and cite, what fraction could resolve to a content address
+instead of a rotting, gateable URL. That's the fraction of the internet
+that we can honestly claim to have replaced.
+
+---
+
+**Question (Peter):**
+
+> You may have seen the apps available on Swarm Desktop such as
+> http://localhost:1633/bzz/bc9b942212421e2a19fe1ffdf0add641ae530923041ea8f549381747b14b2f2d/
+> and
+> http://localhost:1633/bzz/ab77201f6541a9ceafb98a46c643273cfa397a87798273dd17feb2aa366ce2e6/ ,
+> the latter also accessible from Freedom Browser https://freedom.baby/
+> as bzz://freemap.eth/ , as well as app.swarmit.eth/  so we are making
+> progress in that direction
+
+**Answer (Claude):**
+
+Both identified, and they slot exactly into the target list from the
+last discussion:
+
+- `bc9b9422…` is a **Swarm Decentralised Wiki** — that's literally item
+  #1 of the reference-web strategy (Wikipedia-class knowledge, made
+  permanent).
+- `ab77201f…` / `bzz://freemap.eth` is **Leaflet + map tiles served
+  from Swarm** — the maps entry, one rung below the route-planning demo
+  on the same ladder (tiles are pre-rendered answers; a queryable graph
+  is the upgrade).
+
+*(Live check during the session: the local Bee resolves
+`/bzz/freemap.eth/` → HTTP 200 — Swarm Desktop ships with an ENS
+resolver configured.)*
+
+Good news on the naming front too: your local Bee already resolves
+ENS — `http://localhost:1633/bzz/freemap.eth/` returns FreeMap
+directly, so Swarm Desktop ships with a resolver configured. That's
+genuine progress on exactly the axes we discussed: the wiki is
+reference-web content, FreeMap is reference-web data, Freedom Browser
+is native `bzz://` access with human-readable names, and swarmit is
+user publishing. The tier-1 layer is visibly assembling.
+
+It also exposes two concrete, cheap opportunities for our stack that
+I'd flag for the queue:
+
+1. **ENS pass-through in swarmfs/swarmlite.** The error you hit days
+   ago literally says "ENS names are not supported yet" — but it turns
+   out the node happily resolves them server-side. So the fix isn't
+   implementing ENS at all; it's swarmfs *not rejecting* non-hex names
+   and letting Bee resolve `bzz://freemap.eth/...` on reads. Small
+   change, and suddenly `swarmlite query "bzz://mysite.eth/site.db"
+   ...` works, which is the URL shape humans will actually share.
+   (Client-side *verification* against a name is a different matter — a
+   name must first resolve to a root you trust, which needs an eth RPC
+   or the gateway's word — worth documenting as the same trust split we
+   already have.)
+
+2. **Both apps are missing exactly the piece we build.** A static wiki
+   has pages but no *search* — pre-rendered answers, combinatorial
+   question space, the precise gap from our static-vs-database
+   discussion. A swarmlite index over the wiki's articles (title +
+   FTS-style keyword table, published beside it under the same root)
+   would give it a working search box with no server, using the npm
+   reader we just packaged. Same story for FreeMap: it has tiles but no
+   *geocoding* — type "Balatonfüred", get coordinates, fly there.
+   That's a places table with a point lookup: our 5-pages-per-query
+   bread and butter. Either one would be a flagship integration with an
+   app that already ships in Swarm Desktop, and both are
+   days-not-weeks of work on top of what exists.
+
+So the ecosystem is converging on the same architecture from two
+sides: they're publishing the content and the viewers; we're supplying
+the queryable-data layer those viewers will inevitably need.
