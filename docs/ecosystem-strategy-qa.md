@@ -379,3 +379,115 @@ I'd flag for the queue:
 So the ecosystem is converging on the same architecture from two
 sides: they're publishing the content and the viewers; we're supplying
 the queryable-data layer those viewers will inevitably need.
+
+---
+
+**Question (Peter):**
+
+> We started swarmlite to support existing SQL infrastructure and
+> developer skills. SQL has a long and deep theory and highly developed
+> infrastructure. But relational DBMSs are not a perfect fit for Swarm.
+> Maybe functional databases are better (something to consider: would
+> Swarm want to substitute them, or pretend to be them). But an
+> alternative is OntoDAG, which is now for ontologies but I am
+> wondering whether it could be made into a proper database. And if so,
+> what is missing from OntoDAG at the moment.
+
+**Answer (Claude):** *(after reading OntoDAG's HOW_IT_WORKS, roadmap,
+and the recordstore lineage)*
+
+**1. The relational misfit, stated precisely.** SQL's misfit with
+Swarm isn't the relational *model* — it's that mainstream RDBMSs are
+write-oriented server processes: their pages, locks, and transaction
+machinery all assume a single mutable store with an owner. swarmlite
+sidesteps this by amputation (read-only snapshots), which is honest but
+concedes the point: we're using 10% of what a DBMS is.
+
+"Functional database" — in the Datomic sense: the database is an
+immutable value; writes accumulate facts rather than overwrite; queries
+run against a point-in-time value; time travel is free — is not just a
+better fit for Swarm, it's almost a description of it. "The database as
+a value" becomes literal: the value *is* the root hash. Datomic
+simulates immutability on mutable storage; Swarm provides it natively.
+On substitute-vs-pretend: it's a ladder, and we're already on it —
+*pretend* (swarmlite's SQL facade) is the adoption play; *substitute*
+(a native immutable store) is the architecture play; and the two
+connect through materialization (the native store publishes SQL views
+as site.db for the facade's readers). recordstore already sits
+underneath as the shared value layer.
+
+**2. What OntoDAG already has — more database than it admits:** a
+canonical form with a unique fingerprint (same knowledge ⇒ same root:
+*semantic* content addressing, deduplication of meaning — no SQL or
+Datomic database has this); a real query planner with exact statistics
+and provably result-preserving rewrites; CRDT merge (commutative,
+idempotent) — multi-writer convergence *without consensus*, the
+property no pretend-SQL layer can ever offer; and versioned,
+structurally-shared persistence on content-addressed storage.
+
+**3. What's missing, in priority order:** (1) *values* — typed
+attributes and predicates over them; two mechanisms: attribute payloads
+with ordered secondary indexes, and the OntoDAG-native *dimension
+lattices* (calendar chains, geo quad-trees) that make range queries
+just cones; (2) *relations beyond is-a* — "Alice authored Doc1" is not
+subsumption; the cleanest path is a datom layer (entity, relation,
+value) beside the DAG, with the DAG supplying what EAV systems lack: a
+principled taxonomy of entities and relations; (3) *query
+completeness* — union (trivial), negation (needs a closed-world
+decision), projection, eventually rules; (4) *a lazy remote reader* —
+the swarmlite lesson: stop loading everything into RAM; recordstore
+already supports lazy fetches; cached cone summaries make an OntoDAG
+queryable from a browser at tens of fetches per query; (5) *delete
+semantics under merge* (tombstones or a declared grow-only stance);
+(6) *constraints* — disjointness at minimum.
+
+**4. Strategically**, OntoDAG-as-database wouldn't compete with
+swarmlite — it sits above it as the native, multi-writer, semantically
+canonical layer, publishing materialized SQL views downward. The unique
+selling point: **the only database where identical knowledge has an
+identical address, and independent writers converge without a server.**
+
+---
+
+**Follow-up (Peter):**
+
+> About the additional features you suggest: they are interesting but
+> my strategy was to keep it as pure and simple as possible to see how
+> far we can go with the simplest approach. Only add non-ontodag pure
+> features when we hit a wall. An example is geo information: don't
+> integrate a geo engine is we can do it in the spirit of ontodag.
+
+**Answer (Claude):**
+
+The purity strategy is methodologically right, and not for aesthetic
+reasons: OntoDAG's two invariants (canonical form, mergeability) are
+load-bearing, and nearly every "database feature" on my list is a
+potential threat to one of them. Arbitrary secondary indexes threaten
+"same knowledge = same root" unless derived deterministically;
+tombstones complicate idempotent merge; relations imported wholesale
+would dilute the one-primitive query model that makes the planner
+provable. Purity here is what the guarantees are made of.
+
+Re-sorted under the principle:
+
+*Pure now (no model change):* the **lazy remote reader** (pure
+engineering, zero semantics — and it's what makes OntoDAG demonstrable
+on Swarm at scale); **dimension lattices** for time/geo/numeric ranges
+— values-as-categories IS the ontodag-spirit geo engine ("photos of
+dogs from last summer" = one cone intersection; the lattice generator
+is tooling, not model); **union** in get() (query-side set union,
+canonical form untouched).
+
+*Walls, with tripwires* (documented so a future session recognizes
+hitting one, rather than pre-building): exact arithmetic/equality on
+continuous values (lattices quantize; tripwire: a query that needs
+computation, not classification); arbitrary relations (tripwire: users
+mass-reifying relation nodes like "authored-by-Alice"); aggregation
+beyond the free COUNT (descendant_count); negation (requires a
+closed-world decision); deletion under multi-writer merge (tripwire:
+first real collaborative deployment); disjointness constraints
+(tripwire: garbage queries that a Cat∧Dog check would have refused).
+
+This analysis is saved in the OntoDAG repo as
+`docs/DATABASE_DIRECTION.md`, written to stand alone as the kickoff
+context for a future session working there.
