@@ -80,7 +80,7 @@ pip install -e ".[test]"
 Verify:
 
 ```bash
-pytest                          # 45 tests, no node needed
+pytest                          # 43 tests, no node needed
 python examples/offline_demo.py # the demo of §4, offline
 swarmlite --help
 ```
