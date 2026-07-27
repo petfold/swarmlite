@@ -491,3 +491,61 @@ first real collaborative deployment); disjointness constraints
 This analysis is saved in the OntoDAG repo as
 `docs/DATABASE_DIRECTION.md`, written to stand alone as the kickoff
 context for a future session working there.
+
+---
+
+**Question (Peter):**
+
+> In the searchable blog demo, what are the options for being able to
+> comment. And how long in different solutions would it take for the
+> comment to appear? ... Or possibly wait for the GSOC / pub-sub
+> solution that is being promised soon.
+
+**Answer (Claude):**
+
+Comments are the "single-writer interactivity" tier from the
+contention ladder above: many potential writers, but the blogger
+ultimately owns and serializes their own comment section — no stranger
+contention, so no blockchain needed, just *some* channel from a
+reader's browser to a read-only published snapshot. Options considered,
+each with honest latency:
+
+1. **Out-of-band submission, manual/scripted republish** — a form or
+   `mailto:` collects comments elsewhere; the blogger periodically
+   folds them into `comments` rows and republishes with `swarmlite
+   publish --feed`. Appears whenever that publish step next runs —
+   minutes if automated on submit, more realistically hours to days
+   batched. Zero new infrastructure; the pattern is already in
+   DESIGN.md §5.
+2. **Reader writes their own signed feed, blog page aggregates known
+   feeds client-side.** Appears as fast as feed propagation — measured
+   live elsewhere in this project at ~2–3 minutes on Gnosis mainnet.
+   No blogger action needed, but *discovery* of which feeds to check
+   requires a registry the blogger publishes (hand-rolled pub/sub).
+3. **A lightweight centralized relay for intake.** Minutes, nicer UX,
+   but reintroduces exactly the trusted server the architecture exists
+   to avoid.
+4. **True multi-writer via recordstore `commit(reconcile=True)`** over
+   a shared feed — best-effort, not race-free by the library's own
+   admission. Raw comment exists within feed-propagation minutes, but
+   nobody has built a *live-merge reader* that shows it on the page
+   without a full republish.
+
+**Decision: wait for GSOC/pub-sub, do not build any of the above now.**
+GSOC (Graffiti/Generalized Single-Owner Chunks) plus pub/sub is a
+different shape than all four options: push instead of poll, no relay,
+no discovery registry to hand-roll — swarm-kit's `provider.ts` already
+exposes `sendGsoc`/`subscribe` primitives aimed at exactly this
+many-writers-broadcast-to-many-readers pattern (seen directly while
+preparing the swarm-kit integration PR). If it lands as designed,
+comment latency drops to live-chat speed, genuinely serverless,
+leapfrogging every hand-rolled option above — including recordstore
+multi-writer, since GSOC is purpose-built for broadcast rather than
+repurposing single-owner sequential feeds.
+
+**Implication for later sessions:** don't invest in option 2's
+feed-registry plumbing in the meantime — it solves the same discovery
+problem GSOC/pub-sub will solve properly, and that engineering would
+likely be thrown away at that point. The WordPress demo stays
+comment-less until GSOC/pub-sub is available (or demand becomes urgent
+enough to accept option 1 as a deliberate stopgap).
