@@ -1,5 +1,9 @@
 # swarmlite
 
+[![CI](https://github.com/petfold/swarmlite/actions/workflows/ci.yml/badge.svg)](https://github.com/petfold/swarmlite/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/swarmlite)](https://pypi.org/project/swarmlite/)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
+
 **Verifiable serverless SQLite hosting on Ethereum Swarm.**
 
 Publish an ordinary SQLite file to [Swarm](https://docs.ethswarm.org/) and
