@@ -2,13 +2,14 @@ name: Release to PyPI
 
 # Token-less publishing via PyPI Trusted Publishers: PyPI trusts this
 # exact repo+workflow (configured at pypi.org/manage/account/publishing/),
-# so no credentials are stored anywhere. Trigger manually from the
-# Actions tab (or `gh workflow run release.yml`).
+# so no credentials are stored anywhere. Pushing a v* tag publishes;
+# workflow_dispatch is there to retry a failed run without a new tag.
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
-  release:
-    types: [published]
 
 jobs:
   publish:
