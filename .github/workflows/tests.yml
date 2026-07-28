@@ -1,4 +1,4 @@
-name: CI
+name: tests
 
 on:
   push:
@@ -6,24 +6,30 @@ on:
   pull_request:
 
 jobs:
-  python:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           repository: petfold/swarmfs # test against swarmfs main (co-evolving); releases are on PyPI
           path: swarmfs
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - run: pip install -e ./swarmfs -e ".[test]"
-      - run: pytest tests # live tests self-skip without SWARMLITE_TEST_* env; scoped so the swarmfs checkout is not collected
+      # live tests self-skip without SWARMLITE_TEST_*; scoped so the swarmfs
+      # checkout is not collected
+      - run: pytest tests
 
-  node:
+  js:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
           node-version: 22

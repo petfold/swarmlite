@@ -1,6 +1,6 @@
 # swarmlite
 
-[![CI](https://github.com/petfold/swarmlite/actions/workflows/ci.yml/badge.svg)](https://github.com/petfold/swarmlite/actions/workflows/ci.yml)
+[![tests](https://github.com/petfold/swarmlite/actions/workflows/tests.yml/badge.svg)](https://github.com/petfold/swarmlite/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/swarmlite)](https://pypi.org/project/swarmlite/)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 

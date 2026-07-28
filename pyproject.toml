@@ -40,6 +40,8 @@ swarmlite = "swarmlite.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/petfold/swarmlite"
+Repository = "https://github.com/petfold/swarmlite"
+Issues = "https://github.com/petfold/swarmlite/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["swarmlite"]
