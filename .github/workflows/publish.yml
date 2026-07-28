@@ -1,9 +1,12 @@
 name: Publish to PyPI
 
 # Token-less publishing via PyPI Trusted Publishers: PyPI trusts this
-# exact repo+workflow (configured at pypi.org/manage/account/publishing/),
-# so no credentials are stored anywhere. Pushing a v* tag publishes;
-# workflow_dispatch is there to retry a failed run without a new tag.
+# exact repo + workflow FILENAME + environment, so no credentials are
+# stored anywhere. Renaming this file or changing the environment below
+# breaks publishing until the entry at
+# pypi.org/manage/project/swarmlite/settings/publishing/ is updated to match.
+# Pushing a v* tag publishes; workflow_dispatch retries a failed run
+# without needing a new tag.
 
 on:
   push:
@@ -48,6 +51,7 @@ jobs:
   publish:
     needs: [build, js]
     runs-on: ubuntu-latest
+    environment: pypi
     permissions:
       id-token: write # the OIDC handshake with PyPI
     steps:
