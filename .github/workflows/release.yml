@@ -12,14 +12,47 @@ on:
   workflow_dispatch:
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write # the OIDC handshake with PyPI
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install build && python -m build
+      # Unlike ci.yml, this resolves swarmfs from PyPI rather than checking out
+      # its main branch: this job gates a real release, so it must exercise what
+      # `pip install swarmlite` actually gives a user.
+      - run: pip install -e ".[test]"
+      # A v* tag publishes irreversibly — PyPI never allows re-uploading a
+      # version, only yanking. Run the suite first so a tag cannot ship a red
+      # build. Live tests self-skip without SWARMLITE_TEST_*.
+      - run: pytest tests
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test # zero dependencies — no npm install needed
+        working-directory: js
+
+  publish:
+    needs: [build, js]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # the OIDC handshake with PyPI
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
