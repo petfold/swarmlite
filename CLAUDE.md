@@ -125,6 +125,25 @@ the feed URL.
   loudly, not hang).
 - Integration (opt-in): publish → read back via live Bee node; feed follow.
 
+## Packaging & release (decided)
+
+- **Two version strings must move together**: `pyproject.toml` and
+  `swarmlite/__init__.py`'s `__version__`. They drifted once — `__init__`
+  still said `0.1.0` while PyPI served `0.2.1`, so `swarmlite.__version__`
+  lied for two releases. Check both on every bump.
+- **The npm package versions independently** (`js/package.json`). A
+  Python-only change does not bump it, and vice versa; publishing an
+  identical JS package just to match numbers is worse than a gap.
+- **Release = bump both → commit → `git tag vX.Y.Z && git push origin
+  vX.Y.Z`.** `.github/workflows/publish.yml` triggers on the `v*` tag and
+  publishes via PyPI trusted publishing (no stored token) from the `pypi`
+  environment. Renaming that file or changing the environment breaks
+  publishing until the trusted-publisher entry is updated to match.
+- **`swarmfs` floor is a real dependency decision**, not boilerplate: raise
+  it in the same commit that starts using new swarmfs API, or a fresh
+  install resolves an older swarmfs and fails at import (currently
+  `>= 0.4.0` for the stamp-lifecycle surface).
+
 ## Style
 
 - Python ≥ 3.11, hatchling build, flat package dir (`swarmlite/`), BSD-3.
