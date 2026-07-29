@@ -85,8 +85,9 @@ same storage model:
   filesystem with swarmfs's verification enabled (see the swarmfs User
   Guide) — the verifying reader BMT-checks each chunk, and range reads
   still descend only the subtrees the query needs.
-- **Stamps**: same rules — batch depth from file size, data dies with
-  its stamp (User Guide §3).
+- **Stamps**: same rules — batch depth from file size, and the data is
+  only paid for while the stamp lives, so treat expiry as loss (User
+  Guide §3).
 
 ## 4. Choosing between the two shapes
 

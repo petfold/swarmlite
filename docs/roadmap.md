@@ -178,6 +178,42 @@ Goal: a full-stack JS developer never needs Python (see
 **Exit criterion: MET** — a JS developer can `npm i swarmlite` (once
 published) and read, verify, and publish without Python installed.
 
+## v2.3 — stamp lifecycle UX (2026-07-29)
+
+Driven by a real need: the searchable-blog demo had 24 days of postage left and no
+way to extend it except raw `curl`. A published root lives exactly as long as its
+batch, and an expired batch cannot be revived, so renewal belongs in the publisher.
+
+- [x] `swarmlite stamps` — every batch with the two numbers that decide a
+      publication's fate: life left (`batchTTL`, in days) and fullest-bucket
+      occupancy (what actually bounds the next upload). Sorted by urgency.
+- [x] `swarmlite stamps --check [--min-ttl 7d]` — same table, non-zero exit and an
+      actionable line per batch below the threshold. Cron-friendly; prevention beats
+      the alternative, because nothing recovers an expired batch.
+- [x] `swarmlite stamps topup ID --for 4w | --to 60d | --budget 0.5` — the three
+      questions publishers actually ask. Prints cost/effect, surfaces the
+      dilute-first warning, confirms before spending (`--yes` for non-interactive,
+      refused outright when stdin isn't a tty), and waits out the ~40–50 s the node
+      takes to apply it.
+- [x] `swarmlite stamps dilute ID --depth N` — for capacity rather than time, priced
+      in the currency it costs (remaining TTL, roughly halved per depth step).
+- [x] `plan_batch` forwards `redundancy`/`encrypted`/`risk`/`depth`, so sizing can be
+      exact (`depth_for_addresses(split(data)[1])`, 0% overflow risk) instead of an
+      estimate from bytes. Defaults match how swarmlite uploads (erasure level 2).
+- [x] Requires **swarmfs >= 0.4.0** (floor raised from 0.1.0, which would have
+      resolved to a swarmfs without any of these).
+
+Validated live against Bee 2.8.1: `stamps` and `--check` against the real demo batch
+(40.2 d, 4/8 buckets), `topup --for 1h` planning correctly (0.0026 xBZZ) and refusing
+to spend without a confirmation, and a real +1 h renewal driven through this repo's
+sync bridge — which matters because swarmfs's own tests only ever drive it with
+`asyncio.run`, never fsspec's shared background loop.
+
+**Still open**: `publish()` records no batch↔root mapping, so `stamps` can list
+batches but not name the publication each keeps alive. Bee has no reverse index, so
+only swarmlite can supply this; where the record lives (local sidecar vs. published
+manifest) is undecided.
+
 ## Later / opportunistic
 
 - [x] Cookbook: Postgres/MySQL read replica (DONE 2026-07-25,

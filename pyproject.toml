@@ -21,7 +21,9 @@ classifiers = [
 ]
 dependencies = [
     "apsw>=3.45",
-    "swarmfs>=0.1.0",
+    # 0.4.0: redundancy-aware batch sizing, topup/dilute, bucket occupancy —
+    # `swarmlite stamps` and plan_batch's sizing options need all of it
+    "swarmfs>=0.4.0",
     "fsspec>=2023.6.0",
 ]
 

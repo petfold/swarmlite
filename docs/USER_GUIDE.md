@@ -135,20 +135,43 @@ Then poll `curl -s http://localhost:1633/stamps/<batchID>` until
 `"usable": true` (took ~40 s on Gnosis in our session).
 
 **Choosing `depth`** (capacity): theoretical capacity is
-`2^depth × 4 KB`, but immutable batches fail when any *bucket* overflows,
-so leave headroom:
+`2^depth × 4 KB`, but an upload fails when any *bucket* overflows, so
+leave headroom:
 
 | upload size | depth | theoretical capacity |
 |-------------|-------|----------------------|
-| ≤ 15 MB     | 18    | 1 GB                 |
-| ≤ 150 MB    | 19    | 2 GB                 |
-| ≤ 1 GB      | 20    | 4 GB                 |
+| ≤ 2 MB      | 17    | 512 MB               |
+| ≤ 24 MB     | 18    | 1 GB                 |
+| ≤ 166 MB    | 19    | 2 GB                 |
+| ≤ 731 MB    | 20    | 4 GB                 |
+| ≤ 2.4 GB    | 21    | 8 GB                 |
 
 (The gap between the columns is the balls-into-buckets effect: chunks
-hash uniformly into 65 536 buckets and an immutable batch dies when any
-single bucket fills — measured live: one **42 MB** upload filled a
-depth-18 batch. The table keeps that risk under ~5%; `--buy` uses the
-same tiers.)
+hash into 65 536 buckets by their address, each holding
+`2^(depth − 16)`. A chunk landing in a full bucket is refused on an
+immutable batch — HTTP 402 `batch is overissued` — so the upload fails,
+though the batch and everything already stamped survive; diluting one
+depth doubles every bucket and the retry succeeds with the same root.
+Measured live: one **42 MB** upload filled a depth-18 batch, which the
+model puts at ~6% for plain chunks and ~13% once swarmfs's default
+erasure parity is counted.)
+
+The sizes above are what swarmfs's `suggest_depth` accepts at its default
+1% overflow risk **for the way swarmlite uploads** (erasure level 2,
+unencrypted) — it counts parity and manifest chunks, not just payload
+bytes, so a more redundant upload of the same file needs a deeper batch.
+`--buy` uses exactly this. Two ways to do better than an estimate:
+
+```python
+import swarmfs
+from swarmlite.stamps import plan_batch, depth_for_addresses
+
+root, chunks = swarmfs.split(open("site.db", "rb").read())  # needs swarmfs[feeds]
+plan = plan_batch(size, ttl, depth=depth_for_addresses(chunks))  # exact, 0% risk
+```
+
+and, for a batch you already own, `swarmlite stamps` (below) reports the
+true fullest-bucket occupancy rather than a guess.
 
 **Choosing `amount`** (lifetime): validity in seconds is roughly
 `amount / currentPrice × 5` (Gnosis block time), with `currentPrice` from
@@ -163,8 +186,67 @@ much larger amount (weeks/months) or top up later:
 curl -s -X PATCH "http://localhost:1633/stamps/topup/<batchID>/<addedAmount>"
 ```
 
-**The root you publish dies with its stamp.** For a demo, hours are fine;
-for anything real, size the amount accordingly and monitor `batchTTL`.
+Topping up is additive — it adds to the remaining TTL rather than
+restarting it. You rarely need that `curl`, though: see
+[Watching and renewing a batch](#watching-and-renewing-a-batch) below.
+`docs/runbook-stamp-topup.md` keeps the by-hand procedure, the pricing
+arithmetic and the post-topup indexing delay for when you want them.
+
+### Watching and renewing a batch
+
+A published root lives exactly as long as its batch, so this is the
+maintenance the whole thing rests on.
+
+```bash
+swarmlite stamps                        # what you own, and how long it has
+swarmlite stamps --check --min-ttl 7d   # exit 1 when something needs renewing
+```
+
+```
+batch      depth  life left  fullest bucket status
+c931c8a5…     19     40.2 d       4/8 (50%) ok
+```
+
+Two numbers decide a publication's fate. **life left** is the node's
+`batchTTL`; when it hits zero the chunks stop being paid for. **fullest
+bucket** is what bounds the *next* upload — not total capacity — because a
+chunk hashing into a full bucket is refused.
+
+`--check` is built for cron: it prints the same table, then exits non-zero
+with an actionable line per batch below the threshold. Since an expired
+batch cannot be revived, a weekly check is worth more than any amount of
+care at purchase time.
+
+```bash
+swarmlite stamps topup <batchID> --for 4w      # extend BY four weeks
+swarmlite stamps topup <batchID> --to 60d      # extend TO 60 days left
+swarmlite stamps topup <batchID> --budget 0.5  # spend at most 0.5 xBZZ
+```
+
+Each prints the cost, what it buys, and the resulting life, then asks
+before spending (`--yes` to skip, required when stdin isn't a terminal).
+It waits out the ~40–50 s the node takes to apply the change, so when it
+returns the new life is real. The quoted duration is priced at the
+*current* `currentPrice`, which drifts, so re-check rather than trusting
+one calculation.
+
+If the fullest bucket is nearly full you need **capacity**, not time:
+
+```bash
+swarmlite stamps dilute <batchID> --depth 20   # doubles every bucket
+```
+
+Dilution costs only gas, but the same balance now covers twice the chunks,
+so it roughly halves the remaining life per depth step — dilute *first*,
+then top up, or you pay for time the dilution throws away. `topup` warns
+you when a batch is in that state.
+
+**The root you publish outlives its stamp only by luck.** At expiry the
+chunks stop being paid for and become the first candidates for eviction —
+they aren't deleted at that instant, but the window is unpredictable and
+an expired batch cannot be topped up. Treat expiry as loss: for a demo,
+hours are fine; for anything real, size the amount accordingly and
+monitor `batchTTL`.
 
 ## 4. The offline demo (no node, no funds)
 
@@ -540,8 +622,14 @@ Topics are hashed exactly like the Python side, so whatever
 ## 9. Troubleshooting
 
 - **`StampError: no usable postage stamp ... full (utilization at 100%)`**
-  — the batch is exhausted (immutable batches can't be reused once any
-  bucket fills). Buy a new one (§3).
+  or **`402 batch is overissued`** — a bucket is full, so the batch can't
+  stamp further chunks that hash into it. Nothing already stored is lost.
+  Prefer diluting it by one depth
+  (`PATCH /stamps/dilute/<batchID>/<depth+1>`), which doubles every
+  bucket's capacity and lets the same upload through with the same root;
+  it costs gas and halves the remaining TTL, so top up afterwards. Buying
+  a new batch (§3) also works but abandons the paid-for life on the old
+  one.
 - **`ContentLengthError` / `Response payload is not completed` shortly
   after publishing** — seen once in live testing: a large range read was
   truncated by the node right after upload. Retry, and/or use the default

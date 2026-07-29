@@ -96,6 +96,21 @@ the feed URL.
   fixtures) and `resolveFeed(..., {verify: true})` (SOC signature
   recovery, vendored noble-secp256k1). Known follow-up: port the
   erasure-coding fanout fix back to swarmfs `join.py`.
+- **v2.3 (DONE 2026-07-29)** — stamp lifecycle UX: `swarmlite stamps`
+  (life left + fullest-bucket headroom), `--check --min-ttl` for cron,
+  and `stamps topup ID --for/--to/--budget` / `stamps dilute ID --depth`.
+  Mechanics stay in swarmfs (**requires >= 0.4.0**); this repo owns the
+  policy — cost shown and confirmed before spending, the dilute-first
+  warning surfaced, TTL in days rather than raw seconds. `plan_batch`
+  now forwards `redundancy`/`encrypted`/`risk`/`depth`, so a publisher
+  can size a batch exactly (`depth_for_addresses(split(data)[1])`)
+  instead of estimating from bytes. Rationale: a published root lives
+  exactly as long as its batch and an expired batch cannot be revived,
+  so renewal is a publishing concern, not an ops afterthought.
+  **Still open**: the batch↔publication mapping — `publish()` does not
+  record which batch stamped which root, so `stamps` can list batches
+  but cannot say which demo each one keeps alive. Deciding where that
+  record lives (local sidecar vs. in the manifest) is the next step.
 - Later — readahead tuning, hot-page bundling, DuckDB cookbook doc,
   FTS5 demo site.
 

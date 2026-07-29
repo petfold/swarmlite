@@ -93,7 +93,8 @@ Cron the pair:
 
 Stamps: `--buy --ttl 4w --yes` self-serves a batch when none is usable
 (see User Guide §3 for sizing — replicas over 15 MB want depth 19), and
-**the data dies with its stamp** — monitor `batchTTL` or top up.
+**the data is only paid for while the stamp lives** — monitor `batchTTL`
+and top up before it expires, since an expired batch cannot be revived.
 
 ## 4. What readers do
 

@@ -108,6 +108,15 @@ swarmlite query "bzz://<root>/demo.db" \
 No stamp yet? `swarmlite publish demo.db --buy` prices a batch sized
 for the file, shows the xBZZ cost, and buys it from the node's wallet.
 
+A published root lives exactly as long as its postage batch, and an
+expired batch cannot be revived — so renewal is part of publishing:
+
+```bash
+swarmlite stamps                          # life left, and bucket headroom
+swarmlite stamps --check --min-ttl 7d      # exit 1 when one needs renewing (cron)
+swarmlite stamps topup <batchID> --for 4w  # extend it (asks before spending)
+```
+
 Migrating a blog? `examples/wordpress/` turns a standard WordPress
 export (Tools → Export) into a searchable blog under one Swarm root —
 list, search, and every post page are queries against one published
