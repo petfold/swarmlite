@@ -12,7 +12,7 @@ is a relative, not a dependency.)
 Tables here are pinned against the code by `tests/test_reference.py` — if a
 name or parameter in this file and the code disagree, the suite fails.
 
-Package version this file describes: `0.3.0`.
+Package version this file describes: `0.3.1`.
 
 ## 1. Vocabulary
 

@@ -18,6 +18,6 @@ from .vfs import SwarmVFS, connect
 from .publish import publish
 from .snapshots import Snapshot, snapshots
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 __all__ = ["connect", "publish", "snapshots", "Snapshot", "SwarmVFS", "__version__"]
