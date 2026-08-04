@@ -44,6 +44,12 @@ publisher CLI second; everything else after.
    `fsspec.filesystem("bzz"/"bzzf")` file objects (`seek`/`read`,
    `block_size`, caching). If swarmfs lacks a needed capability, extend
    swarmfs (separate repo) rather than duplicating transport logic here.
+   swarmfs's supported API is its test-pinned `docs/REFERENCE.md` — the
+   `swarmfs.feeds` helpers this repo consumes (snapshots.py, publish.py)
+   are documented there as of 2026-08-04, §9 Feeds, with swarmlite named
+   as the consumer. The floor is `swarmfs>=0.7.1`: publish() runs inside
+   `with fs.transaction:`, and 0.7.1 carries the fix for the
+   transaction-exit crash on fsspec < 2024.3.0 (distro-fsspec vintages).
 3. **apsw, not stdlib sqlite3.** stdlib `sqlite3` cannot register a Python
    VFS; apsw can (`apsw.VFS` / `apsw.VFSFile` subclasses).
 4. **Journal/WAL files do not exist remotely.** The VFS must report them

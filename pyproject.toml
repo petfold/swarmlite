@@ -21,9 +21,14 @@ classifiers = [
 ]
 dependencies = [
     "apsw>=3.45",
-    # 0.4.0: redundancy-aware batch sizing, topup/dilute, bucket occupancy —
-    # `swarmlite stamps` and plan_batch's sizing options need all of it
-    "swarmfs>=0.4.0",
+    # 0.4.0 brought redundancy-aware batch sizing, topup/dilute, bucket
+    # occupancy (`swarmlite stamps` and plan_batch need all of it); the
+    # 0.7.1 floor additionally carries swarmfs's fix for the
+    # transaction-exit crash on fsspec < 2024.3.0 — publish() runs inside
+    # `with fs.transaction:`, and LTS systems really do run distro fsspec
+    # of that vintage (pip won't upgrade a dependency that already
+    # satisfies a floor).
+    "swarmfs>=0.7.1",
     "fsspec>=2023.6.0",
 ]
 

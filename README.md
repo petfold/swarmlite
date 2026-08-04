@@ -192,10 +192,12 @@ the first bad chunk. User Guide §7 has the details.
 ## Relatives
 
 - [swarmfs](https://github.com/petfold/swarmfs) — the fsspec backend this
-  builds on (range reads, transactional writes, feeds).
+  builds on (range reads, transactional writes, feeds). Its API is the
+  test-pinned [REFERENCE.md](https://github.com/petfold/swarmfs/blob/main/docs/REFERENCE.md).
 - [recordstore](https://github.com/petfold/recordstore) — versioned
   key→record store; the natural system of record that a published
-  `site.db` is materialized from.
+  `site.db` is materialized from. Likewise:
+  [REFERENCE.md](https://github.com/petfold/recordstore/blob/main/docs/REFERENCE.md).
 - DuckDB + Parquet over range requests — the analytics flavour of the
   same trick: [cookbook](docs/cookbook-duckdb-parquet.md) with live
   measurements. And your Postgres/MySQL can feed all of this — the
