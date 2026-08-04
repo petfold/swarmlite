@@ -1,5 +1,10 @@
 # swarmlite — User Guide
 
+*(This is the tutorial — it teaches by doing, and every output shown was
+produced for real. To look something up — a signature, a flag, a URL
+form, a table — use the compact [`REFERENCE.md`](REFERENCE.md), which is
+pinned against the code by the test suite.)*
+
 Everything needed to go from an empty machine to running lazy, verifiable
 `SELECT` against a SQLite database published on Ethereum Swarm.
 
@@ -138,15 +143,10 @@ Then poll `curl -s http://localhost:1633/stamps/<batchID>` until
 `2^depth × 4 KB`, but an upload fails when any *bucket* overflows, so
 leave headroom:
 
-| upload size | depth | theoretical capacity |
-|-------------|-------|----------------------|
-| ≤ 2 MB      | 17    | 512 MB               |
-| ≤ 24 MB     | 18    | 1 GB                 |
-| ≤ 166 MB    | 19    | 2 GB                 |
-| ≤ 731 MB    | 20    | 4 GB                 |
-| ≤ 2.4 GB    | 21    | 8 GB                 |
+The size→depth table lives in [REFERENCE.md §6](REFERENCE.md#6-stamps-swarmlitestamps).
 
-(The gap between the columns is the balls-into-buckets effect: chunks
+(The gap between upload size and theoretical capacity there is the
+balls-into-buckets effect: chunks
 hash into 65 536 buckets by their address, each holding
 `2^(depth − 16)`. A chunk landing in a full bucket is refused on an
 immutable batch — HTTP 402 `batch is overissued` — so the upload fails,
@@ -156,7 +156,7 @@ Measured live: one **42 MB** upload filled a depth-18 batch, which the
 model puts at ~6% for plain chunks and ~13% once swarmfs's default
 erasure parity is counted.)
 
-The sizes above are what swarmfs's `suggest_depth` accepts at its default
+Those sizes are what swarmfs's `suggest_depth` accepts at its default
 1% overflow risk **for the way swarmlite uploads** (erasure level 2,
 unencrypted) — it counts parity and manifest chunks, not just payload
 bytes, so a more redundant upload of the same file needs a deeper batch.
@@ -173,10 +173,11 @@ plan = plan_batch(size, ttl, depth=depth_for_addresses(chunks))  # exact, 0% ris
 and, for a batch you already own, `swarmlite stamps` (below) reports the
 true fullest-bucket occupancy rather than a guess.
 
-**Choosing `amount`** (lifetime): validity in seconds is roughly
-`amount / currentPrice × 5` (Gnosis block time), with `currentPrice` from
-`curl -s http://localhost:1633/chainstate`. Cost in xBZZ is
-`amount × 2^depth / 10^16`.
+**Choosing `amount`** (lifetime): the arithmetic is in
+[REFERENCE.md §6](REFERENCE.md#6-stamps-swarmlitestamps); the short
+version is that validity scales with `amount` and the current chain
+price, so quote it with `swarmlite stamps` rather than trusting a
+purchase-time estimate.
 
 Worked example from our session: `amount=2000000000`, `depth=19` →
 **≈ 0.105 xBZZ**, TTL ≈ 41 hours. For a durable publication you'd pick a
@@ -422,9 +423,10 @@ swarmlite query "bzz://<root>/demo.db" \
 `<root>` is the 64-hex reference printed by `swarmlite publish` (§5) —
 substitute your own; the ids above are from the 100 k-row demo build.
 
-Options: `--api-url` (else `$BEE_API_URL`, else localhost), `--stats`
-(page-economy line on stderr), `--block-size` (transport readahead,
-default 64 KiB — see below).
+(Flags for every command are tabulated in
+[REFERENCE.md §7](REFERENCE.md#7-cli); the ones used here are `--stats`
+for the page-economy line and `--api-url` when the node isn't on
+localhost.)
 
 ### Python
 
@@ -448,29 +450,15 @@ is strictly read-only: any DML/DDL raises `apsw.ReadOnlyError`. Keyword
 arguments beyond `cache_pages` are passed to the fsspec filesystem, e.g.
 `swarmlite.connect(url, api_url="http://bee:1633", block_size=65536)`.
 
-URL forms:
-
-- `bzz://<root>/site.db` — an immutable, pinned version. Reproducible
-  forever (while stamped).
-- `bzzf://<owner>/<topic>/<name>` — a feed, resolved to the latest
-  published version at open time (verified live: a feed-published test DB
-  answered a point lookup in 3 page fetches). Freshly published feeds
-  take minutes to become resolvable (§9); pin roots when you need
-  reproducibility.
-- `file://…`, `memory://…` — local/testing, same code path.
-
-### Tuning: `block_size` and the page cache
-
-Two caches cooperate: swarmlite's LRU of 4 KB pages (`cache_pages`,
-default 1024 ≈ 4 MB) and the transport's readahead block
-(`block_size`). Each VFS cache miss pulls one block:
-
-- **Point lookups / OLTP-ish reads:** small blocks — the 64 KiB default.
-- **Scans / analytics:** larger blocks (e.g. `block_size=2**20`) fetch
-  the file in fewer round trips.
-
-The `--stats` counters report what the VFS requested (pages); the network
-may transfer more (whole blocks). If the numbers matter, measure both.
+The same URL works pinned (`bzz://<root>/…` — reproducible forever) or
+through a feed (`bzzf://<owner>/<topic>/…` — always the latest version;
+verified live: a feed-published test DB answered a point lookup in 3
+page fetches, though freshly published feeds take minutes to become
+resolvable, §9). The full URL-form and tuning tables — `cache_pages`,
+`block_size`, and the two-cache interplay — moved to
+[REFERENCE.md §4](REFERENCE.md#4-reading); the one rule worth
+remembering: small blocks for point lookups (the default), big blocks
+(`block_size=2**20`) for scans.
 
 ## 7. The browser demo (a database behind a static page)
 
