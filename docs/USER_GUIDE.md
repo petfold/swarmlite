@@ -318,6 +318,30 @@ problem feeds exist to solve. Skip the feed only for truly one-shot
 datasets, or when readers learn the root some other way (app config, a
 registry, a contract).
 
+### Private databases: `--encrypt`
+
+Add `--encrypt` (Python: `encrypt=True`) and everything — pages and
+manifest alike — is encrypted node-side before it reaches the network:
+
+```bash
+swarmlite publish site.db --encrypt --stamp <batchID>
+# pin:  bzz://<128 hex chars>/site.db
+```
+
+**The URL itself is now the secret.** The 128-hex root is the content
+address *plus* the decryption key: whoever you give the full URL can
+query the database exactly as before (readers need no flag — the node
+decrypts in the load path, and the VFS pages through ciphertext-at-rest
+transparently); everyone else, including the nodes storing it, holds
+noise. Feeds compose: `--encrypt --feed mysite` gives a stable
+`bzzf://` URL whose updates carry the full reference, so feed readers
+get decryption transparently too — but note the feed *location* (owner
++ topic) is still public, only the content is not. Two practical
+consequences: treat the URL like a credential (anyone who ever sees it
+can read that version forever), and expect a somewhat deeper batch —
+encryption raises the stamped-chunk count, which `--buy` accounts for
+automatically (needs swarmfs ≥ 0.9).
+
 ### Updating a published database (yes, UPDATE works — locally)
 
 The write cycle is: edit the local file with ordinary SQL, republish.

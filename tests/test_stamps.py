@@ -84,7 +84,8 @@ def test_the_bridge_forwards_sizing_options():
 def test_cli_buy_flow(monkeypatch, tmp_path, capsys):
     db = tmp_path / "site.db"
     db.write_bytes(b"\0" * MB)
-    monkeypatch.setattr(stamps, "plan_batch", lambda size, ttl, api: stamps.BatchPlan(
+    monkeypatch.setattr(stamps, "plan_batch",
+                    lambda size, ttl, api, **sizing: stamps.BatchPlan(
         depth=18, amount=17280000, ttl_secs=86400, cost_bzz=0.0154,
     ))
     monkeypatch.setattr(stamps, "buy_batch", lambda api, amount, depth: "ef" * 32)
@@ -115,7 +116,8 @@ def test_cli_buy_conflicts_and_confirmation(monkeypatch, tmp_path, capsys):
     assert "mutually exclusive" in capsys.readouterr().err
 
     # non-interactive stdin without --yes must refuse, not hang
-    monkeypatch.setattr(stamps, "plan_batch", lambda size, ttl, api: stamps.BatchPlan(
+    monkeypatch.setattr(stamps, "plan_batch",
+                    lambda size, ttl, api, **sizing: stamps.BatchPlan(
         depth=18, amount=1, ttl_secs=86400, cost_bzz=0.1,
     ))
     assert main(["publish", str(db), "--buy"]) == 1

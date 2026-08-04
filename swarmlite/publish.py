@@ -125,6 +125,18 @@ def prepare(db_path: str | os.PathLike, out_path: str | os.PathLike) -> list[str
     return warnings
 
 
+def _filesystem(protocol: str, **opts):
+    try:
+        return fsspec.filesystem(protocol, **opts)
+    except TypeError as e:
+        if "encrypt" in str(e):
+            raise PublishError(
+                "encrypt=True needs swarmfs >= 0.9 (the encrypted-storage "
+                "release): pip install -U swarmfs"
+            ) from e
+        raise
+
+
 def publish(
     db_path: str | os.PathLike,
     *,
@@ -133,6 +145,7 @@ def publish(
     stamp: str = "auto",
     signer: str | None = None,
     api_url: str | None = None,
+    encrypt: bool = False,
     quiet: bool = False,
 ) -> str:
     """Publish a local SQLite file to Swarm; return the immutable root.
@@ -146,6 +159,15 @@ def publish(
     publishing needs ``signer`` (the owner's private key hex; falls back
     to ``$SWARMLITE_SIGNER``) and the swarmfs ``feeds`` extra.
 
+    With ``encrypt``, everything — pages and manifest alike — is
+    encrypted node-side (swarmfs ≥ 0.9): the returned root is 128 hex
+    (address + decryption key), so **the URL itself is the secret** —
+    whoever holds the full ``bzz://`` or feed-resolved reference reads
+    plaintext, everyone else stores noise. Readers need no flag; the node
+    decrypts in the load path, and feeds carry the full reference. Note
+    an encrypted upload stamps more chunks (size the batch with
+    ``encrypted=True`` / ``--encrypt``).
+
     Warnings from the checklist go to stderr unless ``quiet``.
     ``name`` is the file name inside the published manifest; it defaults
     to the source file's own name.
@@ -154,6 +176,8 @@ def publish(
     fs_opts: dict = {"stamp": stamp}
     if api_url:
         fs_opts["api_url"] = api_url
+    if encrypt:
+        fs_opts["encrypt"] = True
 
     workdir = tempfile.mkdtemp(prefix="swarmlite-publish-")
     try:
@@ -172,7 +196,7 @@ def publish(
             from swarmfs.feeds import FeedSigner  # needs swarmfs[feeds]
 
             owner = FeedSigner(signer).owner_hex
-            fs = fsspec.filesystem("bzzf", signer=signer, **fs_opts)
+            fs = _filesystem("bzzf", signer=signer, **fs_opts)
             feed_base = f"bzzf://{owner}/{feed}"
             with fs.transaction:
                 fs.put_file(str(prepared), f"{feed_base}/{name}")
@@ -181,7 +205,7 @@ def publish(
                 print(f"pin:  bzz://{root}/{name}", file=sys.stderr)
                 print(f"feed: {feed_base}/{name}", file=sys.stderr)
         else:
-            fs = fsspec.filesystem("bzz", **fs_opts)
+            fs = _filesystem("bzz", **fs_opts)
             with fs.transaction:
                 fs.put_file(str(prepared), f"bzz://new/{name}")
             root = fs.latest("new")

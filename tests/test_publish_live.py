@@ -74,3 +74,18 @@ def test_feed_roundtrip(tmp_path):
             last = e
             time.sleep(10)
     pytest.fail(f"feed read did not become available: {last!r}")
+
+
+def test_encrypted_pin_roundtrip(tmp_path):
+    """Encrypted publish and recall: the 128-hex URL is the secret; the
+    reader needs no flag — the node decrypts in the load path, and the
+    VFS pages through ciphertext-at-rest transparently."""
+    root = swarmlite.publish(
+        small_db(tmp_path), name="enc.db", stamp=STAMP, api_url=BEE,
+        encrypt=True, quiet=True,
+    )
+    assert len(root) == 128
+    con = swarmlite.connect(f"bzz://{root}/enc.db", api_url=BEE)
+    assert list(con.execute("SELECT name FROM t WHERE id=123")) == [("row-123",)]
+    assert con.swarmlite_file.stats()["pages_fetched"] <= 8
+    con.close()

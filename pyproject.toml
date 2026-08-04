@@ -27,7 +27,9 @@ dependencies = [
     # transaction-exit crash on fsspec < 2024.3.0 — publish() runs inside
     # `with fs.transaction:`, and LTS systems really do run distro fsspec
     # of that vintage (pip won't upgrade a dependency that already
-    # satisfies a floor).
+    # satisfies a floor). publish(encrypt=True) needs swarmfs >= 0.9 (the
+    # encrypted-storage release) — guarded at runtime with a clear error
+    # rather than raising the floor for everyone.
     "swarmfs>=0.7.1",
     "fsspec>=2023.6.0",
 ]

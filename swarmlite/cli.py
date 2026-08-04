@@ -76,7 +76,8 @@ def _buy_stamp(args: argparse.Namespace) -> str:
                          "--buy always purchases a fresh batch")
     size = os.path.getsize(args.db_path)
     api_url = _api_url(args)
-    plan = plan_batch(size, parse_ttl(args.ttl), api_url)
+    plan = plan_batch(size, parse_ttl(args.ttl), api_url,
+                      encrypted=getattr(args, "encrypt", False))
     print(
         f"batch for {size / 2**20:.1f} MB: depth {plan.depth}, "
         f"amount {plan.amount}, lasting ~{plan.ttl_secs / 3600:.0f} h "
@@ -218,6 +219,13 @@ def _run(argv: list[str] | None = None) -> int:
     p_pub.add_argument("--stamp", default="auto")
     p_pub.add_argument("--api-url", dest="api_url")
     p_pub.add_argument(
+        "--encrypt", action="store_true",
+        help="encrypt everything node-side; the returned 128-hex URL "
+             "carries the decryption key — the URL is the secret "
+             "(needs swarmfs >= 0.9; encrypted uploads stamp more "
+             "chunks, and --buy sizes for that)",
+    )
+    p_pub.add_argument(
         "--buy", action="store_true",
         help="buy a new postage batch sized for the file from the node's "
         "wallet (shows the xBZZ cost and asks first)",
@@ -310,6 +318,7 @@ def _run(argv: list[str] | None = None) -> int:
             root = publish(
                 args.db_path, name=args.name, feed=args.feed,
                 signer=args.signer, stamp=stamp, api_url=args.api_url,
+                encrypt=args.encrypt,
             )
         except _stamp_error() as e:
             raise type(e)(

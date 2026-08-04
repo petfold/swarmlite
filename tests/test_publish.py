@@ -208,3 +208,88 @@ def test_publish_name_defaults_to_source_filename(tmp_path, monkeypatch, capsys)
     err = capsys.readouterr().err
     assert f"bzz://{root}/mydata.db" in err
     assert "--feed" in err  # pin-only publish points at the feed option
+
+
+# ---------------------------------------------------------------------------
+# encryption (delegated to swarmfs's encrypt storage option)
+# ---------------------------------------------------------------------------
+
+def test_publish_encrypt_passes_the_option(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_filesystem(proto, **kw):
+        seen["proto"], seen["kw"] = proto, kw
+        return FakeFS()
+
+    patch_fs(monkeypatch, fake_filesystem)
+    src = make_db(tmp_path / "src.db", rows=10)
+    swarmlite.publish(src, name="demo.db", encrypt=True, quiet=True)
+    assert seen["proto"] == "bzz"
+    assert seen["kw"]["encrypt"] is True
+
+
+def test_publish_encrypt_feed_path(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_filesystem(proto, **kw):
+        seen["proto"], seen["kw"] = proto, kw
+        return FakeFS()
+
+    patch_fs(monkeypatch, fake_filesystem)
+    src = make_db(tmp_path / "src.db", rows=10)
+    swarmlite.publish(src, name="demo.db", feed="site", signer="11" * 32,
+                      encrypt=True, quiet=True)
+    assert seen["proto"] == "bzzf"
+    assert seen["kw"]["encrypt"] is True and seen["kw"]["signer"] == "11" * 32
+
+
+def test_publish_without_encrypt_omits_the_option(tmp_path, monkeypatch):
+    """No `encrypt` key at all unless asked — so plain publishes keep
+    working against swarmfs releases older than the encrypt option."""
+    seen = {}
+
+    def fake_filesystem(proto, **kw):
+        seen["kw"] = kw
+        return FakeFS()
+
+    patch_fs(monkeypatch, fake_filesystem)
+    src = make_db(tmp_path / "src.db", rows=10)
+    swarmlite.publish(src, name="demo.db", quiet=True)
+    assert "encrypt" not in seen["kw"]
+
+
+def test_publish_encrypt_on_old_swarmfs_fails_clearly(tmp_path, monkeypatch):
+    def old_swarmfs(proto, **kw):
+        raise TypeError(
+            "__init__() got an unexpected keyword argument 'encrypt'")
+
+    patch_fs(monkeypatch, old_swarmfs)
+    src = make_db(tmp_path / "src.db", rows=10)
+    with pytest.raises(PublishError, match="swarmfs >= 0.9"):
+        swarmlite.publish(src, encrypt=True, quiet=True)
+
+
+def test_buy_sizes_for_encryption(tmp_path, monkeypatch):
+    """--buy must size the batch for the encrypted chunk count (up to
+    1.7x more chunks) — the encrypted flag reaches plan_batch."""
+    import argparse
+
+    from swarmlite import cli as climod
+    from swarmlite import stamps as stamps_mod
+
+    captured = {}
+
+    class Plan:
+        depth, amount, ttl_secs, cost_bzz = 18, 1, 3600, 0.0321
+
+    def fake_plan(size, ttl, api_url=None, **sizing):
+        captured.update(sizing)
+        return Plan
+
+    monkeypatch.setattr(stamps_mod, "plan_batch", fake_plan)
+    monkeypatch.setattr(stamps_mod, "buy_batch", lambda *a: "aa" * 32)
+    db = make_db(tmp_path / "b.db", rows=10)
+    args = argparse.Namespace(db_path=str(db), stamp="auto", ttl="1d",
+                              yes=True, encrypt=True, api_url=None)
+    assert climod._buy_stamp(args) == "aa" * 32
+    assert captured.get("encrypted") is True

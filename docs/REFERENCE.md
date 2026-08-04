@@ -3,10 +3,12 @@
 Compact, definition-first, no narrative. The tutorial lives in the
 [User Guide](USER_GUIDE.md); design in [DESIGN.md](DESIGN.md); operational
 recipes in the cookbooks and the [stamp runbook](runbook-stamp-topup.md).
-Dependencies keep their own test-pinned references:
+The one dependency keeps its own test-pinned reference:
 [swarmfs](https://github.com/petfold/swarmfs/blob/main/docs/REFERENCE.md)
-(the transport) and
-[recordstore](https://github.com/petfold/recordstore/blob/main/docs/REFERENCE.md).
+— **all** storage/transport goes through it, reached via fsspec's protocol
+registry (`bzz://`/`bzzf://` URLs), not direct imports.
+([recordstore](https://github.com/petfold/recordstore/blob/main/docs/REFERENCE.md)
+is a relative, not a dependency.)
 Tables here are pinned against the code by `tests/test_reference.py` — if a
 name or parameter in this file and the code disagree, the suite fails.
 
@@ -53,7 +55,7 @@ URL forms accepted by `connect` (and `swarmlite query`):
 
 | form | meaning |
 |---|---|
-| `bzz://<root>/<name>` | immutable pin |
+| `bzz://<root>/<name>` | immutable pin (128-hex `<root>` = encrypted; the node decrypts for whoever holds the full reference) |
 | `bzzf://<owner>/<topic>/<name>` | feed, resolved to the latest version at open time (fresh feeds take minutes to become resolvable) |
 | `file://…`, `memory://…` | local/testing, same code path |
 
@@ -70,7 +72,7 @@ node traffic (blocks) when it matters.
 
 | member | signature | semantics |
 |---|---|---|
-| `publish` | `(db_path, *, name=None, feed=None, stamp="auto", signer=None, api_url=None, quiet=False)` | run *prepare* on a temporary copy (the source is never touched; live WAL databases are checkpointed via the backup API), upload inside a swarmfs transaction, return the root. `feed=` also publishes a signed feed update (signer hex or `$SWARMLITE_SIGNER`; needs `[feeds]`). Fixable issues are warnings; a failed `integrity_check` aborts. |
+| `publish` | `(db_path, *, name=None, feed=None, stamp="auto", signer=None, api_url=None, encrypt=False, quiet=False)` | run *prepare* on a temporary copy (the source is never touched; live WAL databases are checkpointed via the backup API), upload inside a swarmfs transaction, return the root. `feed=` also publishes a signed feed update (signer hex or `$SWARMLITE_SIGNER`; needs `[feeds]`). `encrypt=` encrypts everything node-side (swarmfs ≥ 0.9): the root becomes 128-hex — **the URL is the secret**; readers need no flag, feeds carry the full reference, and `--buy` sizing accounts for the larger encrypted chunk count. Fixable issues are warnings; a failed `integrity_check` aborts. |
 | `snapshots` | `(url, *, verify=False, **storage_options)` | list a feed's history as `Snapshot`s; `verify=True` signature-checks every update (needs `[feeds]`). |
 
 (`prepare(db_path, out_path)` — the checklist alone, returning the warning
@@ -121,7 +123,7 @@ localhost:1633):
 
 | command | key flags | does |
 |---|---|---|
-| `publish DB` | `--name`, `--feed TOPIC`, `--signer HEX` (or `$SWARMLITE_SIGNER`), `--stamp ID`, `--buy`, `--ttl 36h/7d/4w`, `--yes`, `--quiet` | prepare + upload; prints `pin:` and (with a feed) `feed:` URLs. `--buy` sizes, quotes the exact xBZZ cost, and asks first. |
+| `publish DB` | `--name`, `--feed TOPIC`, `--signer HEX` (or `$SWARMLITE_SIGNER`), `--stamp ID`, `--buy`, `--ttl 36h/7d/4w`, `--encrypt`, `--yes`, `--quiet` | prepare + upload; prints `pin:` and (with a feed) `feed:` URLs. `--buy` sizes, quotes the exact xBZZ cost, and asks first. |
 | `query URL SQL` | `--stats`, `--block-size N` | run SQL against a published database; `--stats` prints the page-economy line. |
 | `stamps [list]` | | batches with usability, TTL, fullest-bucket occupancy. |
 | `stamps check ID` | `--min-ttl` | exit non-zero when renewal is needed (cron-friendly). |
