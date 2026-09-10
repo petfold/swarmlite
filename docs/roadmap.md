@@ -235,7 +235,7 @@ manifest) is undecided.
       the manifest.
 - Mongo-flavored query facade over recordstore, if demand appears.
 - Readahead tuning; bundling hot top-level pages into one prefetch.
-- recordstore → `site.db` materialization example (datacat pattern).
+- recordstore → `site.db` materialization example (holdings pattern).
 - Multi-author example: per-author feeds, publisher merges via
   recordstore `reconcile`.
 - Optional: page-level proof serving for gateway readers (BMT inclusion

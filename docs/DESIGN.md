@@ -88,7 +88,7 @@ optionally `bzzf://` feed update (`ffs.pipe_file(feed_url, root)`).
 
 Every publish is a permanent snapshot (old roots stay valid). If
 recordstore is the system of record, `site.db` is materialized from each
-commit — the datacat pattern: authoritative store, disposable SQL
+commit — the holdings pattern: authoritative store, disposable SQL
 projection. The publish step is where that materialization plugs in, but
 swarmlite itself is agnostic about where the local DB came from.
 
