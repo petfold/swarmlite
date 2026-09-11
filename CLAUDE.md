@@ -15,7 +15,7 @@ immutable snapshot and advances a feed. Pitch: *"verifiable serverless
 SQLite hosting."*
 
 Full design: `docs/DESIGN.md`. Build order and exit criteria:
-`docs/roadmap.md`. The design was worked out in the "Databases on Swarm"
+`ROADMAP.md`. The design was worked out in the "Databases on Swarm"
 talk (Balaton, July 2026) and its source conversations.
 
 ## Primary audience (drives priorities)
@@ -84,7 +84,7 @@ integrity check → upload via `fs.transaction` → optionally update
 `bzzf://` feed with the new root. Print both the immutable root (pin) and
 the feed URL.
 
-## Phases (details in docs/roadmap.md)
+## Phases (details in ROADMAP.md)
 
 - **v0 (DONE 2026-07-23)** — Python read-only VFS over swarmfs;
   `connect()`; offline tests; demonstrated against a real published DB.

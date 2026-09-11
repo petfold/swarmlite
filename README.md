@@ -35,7 +35,7 @@ has the complete setup and worked examples**; the lookup tables — every
 export, signature, flag and URL form, pinned against the code by the test
 suite — are in **[docs/REFERENCE.md](docs/REFERENCE.md)** (the document to
 hand to an AI agent); design in [docs/DESIGN.md](docs/DESIGN.md), plan in
-[docs/roadmap.md](docs/roadmap.md).
+[ROADMAP.md](ROADMAP.md).
 
 ## How it works
 

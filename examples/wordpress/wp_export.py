@@ -74,7 +74,7 @@ def build_db(blog_title: str, posts: list[dict], out_path: str) -> None:
         CREATE INDEX posts_ts ON posts(ts);
         CREATE INDEX posts_slug ON posts(slug);
         -- ts is IN the key: "newest posts matching <word>" walks one
-        -- index range (see docs/roadmap.md v2 for the measured cost of
+        -- index range (see ROADMAP.md v2 for the measured cost of
         -- getting this wrong)
         CREATE TABLE kw(word TEXT, ts INTEGER, id INTEGER,
                         PRIMARY KEY(word, ts, id)) WITHOUT ROWID;
