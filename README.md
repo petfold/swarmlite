@@ -75,7 +75,7 @@ cd swarmlite
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"
 
-pytest                           # 43 tests, no node needed
+pytest                           # 67 tests; the 3 live ones skip with no node
 python examples/offline_demo.py  # the demo, offline — no node, no funds
 ```
 
