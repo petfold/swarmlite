@@ -36,13 +36,15 @@ export class SwarmVFS extends FacadeVFS {
   /** @type {Map<string, object>} short alias -> {size, read} source */
   #sources = new Map();
   #cachePages;
+  #readahead;
   #fetch;
 
   /** @param {string} name - VFS name to register under (unique per instance)
    * @param {object} module - the wa-sqlite module from SQLiteAsyncESMFactory */
-  constructor(name, module, { cachePages = DEFAULT_CACHE_PAGES, fetchFn } = {}) {
+  constructor(name, module, { cachePages = DEFAULT_CACHE_PAGES, readahead = 0, fetchFn } = {}) {
     super(name, module);
     this.#cachePages = Math.max(1, cachePages);
+    this.#readahead = Math.max(0, Math.floor(readahead));
     this.#fetch = fetchFn ?? ((...args) => globalThis.fetch(...args));
   }
 
@@ -208,7 +210,9 @@ export class SwarmVFS extends FacadeVFS {
   // ---- paging ------------------------------------------------------------
 
   /** Serve [offset, offset+length) from the page cache, fetching each
-   * contiguous run of missing pages with a single Range request. */
+   * contiguous run of missing pages with a single Range request — widened
+   * by up to `readahead` uncached pages on each side, since SQLite reads
+   * neighbouring pages one at a time (and some scans walk backwards). */
   async #readRange(file, offset, length) {
     const first = Math.floor(offset / PAGE_SIZE);
     const last = Math.floor((offset + length - 1) / PAGE_SIZE);
@@ -228,15 +232,22 @@ export class SwarmVFS extends FacadeVFS {
       if (pages.has(i)) { i++; continue; }
       let j = i;
       while (j <= last && !pages.has(j) && j - i < MAX_RUN_PAGES) j++;
-      const from = i * PAGE_SIZE;
-      const to = Math.min(j * PAGE_SIZE, file.size) - 1;
+      let lo = i;
+      let hi = j;
+      const pageCount = Math.ceil(file.size / PAGE_SIZE);
+      while (lo > 0 && i - lo < this.#readahead && !file.cache.has(lo - 1) &&
+             hi - lo < MAX_RUN_PAGES) lo--;
+      while (hi < pageCount && hi - j < this.#readahead && !file.cache.has(hi) &&
+             hi - lo < MAX_RUN_PAGES) hi++;
+      const from = lo * PAGE_SIZE;
+      const to = Math.min(hi * PAGE_SIZE, file.size) - 1;
       const blob = file.source
         ? await file.source.read(from, to)
         : await this.#fetchRange(file.url, from, to);
       file.stats.readCount += 1;
       file.stats.bytesFetched += blob.byteLength;
-      for (let k = i; k < j; k++) {
-        const page = blob.subarray((k - i) * PAGE_SIZE, (k - i + 1) * PAGE_SIZE);
+      for (let k = lo; k < hi; k++) {
+        const page = blob.subarray((k - lo) * PAGE_SIZE, (k - lo + 1) * PAGE_SIZE);
         pages.set(k, page);
         file.cache.set(k, page);
         file.stats.pagesFetched += 1;

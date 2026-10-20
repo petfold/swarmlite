@@ -43,7 +43,7 @@ const freedomProvider = () =>
  * provider as `swarm`, or `swarm: null` to use HTTP anyway.
  * `transport` on the result says which path was taken. */
 export async function open(url, {
-  cachePages, moduleOptions, verify = false, fetchFn, swarm = freedomProvider(),
+  cachePages, readahead, moduleOptions, verify = false, fetchFn, swarm = freedomProvider(),
 } = {}) {
   modulePromise ??= SQLiteAsyncESMFactory(moduleOptions);
   const module = await modulePromise;
@@ -52,7 +52,7 @@ export async function open(url, {
   // register a unique VFS name per open (each VFS instance carries its
   // own cache/stats), and open via a short alias — SQLite VFS filename
   // buffers can be as small as 64 bytes, too short for gateway URLs
-  const vfs = new SwarmVFS(`swarmlite-${++aliasCounter}`, module, { cachePages, fetchFn });
+  const vfs = new SwarmVFS(`swarmlite-${++aliasCounter}`, module, { cachePages, readahead, fetchFn });
   const alias = `db-${aliasCounter}`;
   let chunkStore = null;
   if (verify || swarm) {

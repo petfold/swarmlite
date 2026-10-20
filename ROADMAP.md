@@ -121,9 +121,16 @@ Re-measured on Bee 2.8.3 with the new engine: the same 5 reads / 20 KB
 cold and 23 pages / 92 KB per session. In Freedom Browser (its own Ant
 node, cold start) the same page reads through `window.swarm`: open plus
 the first screen in 39 s, then 9 pages (52 KB) in 5.9 s and a search of
-12 pages (64 KB) in 8.0 s. That's slow next to Range reads (~150 ms)
-because chunks are fetched one at a time; fetching siblings in parallel
-is the obvious next step. The previous root (`d1d54686…`,
+12 pages (64 KB) in 8.0 s, against ~150 ms per query over Range reads.
+Measured with a 300 ms stand-in afterwards: SQLite asks for one page per
+read (22 single-page reads for the session), so per-query time is pages ×
+round trip. Remembering subtree spans and fetching concurrently took the
+session from 34 to 30 chunk reads (about 15% faster). Opt-in `readahead`
+fetches neighbouring pages in parallel (up to 8 in flight), but nearly
+triples the reads (2.7× at `readahead: 2`) for a 5–34% gain. The remaining lever is fewer round trips per
+page: either an Ant-side cache warmed by prefetching the intermediate
+level (≈100 chunks for this file, affordable only on a connected origin's
+budget), or a provider method that returns a byte range in one call. The previous root (`d1d54686…`,
 2026-07-25, 28-day batch) expired with its batch, which is the case
 for recording which batch keeps which root alive (v2.3, still open).
 

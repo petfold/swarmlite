@@ -136,17 +136,24 @@ const content = b64(fixture.db.content);
 // ---- Freedom Browser: reads through window.swarm ----------------------------
 
 /** A window.swarm stand-in answering swarm_readChunk from a chunk map the
- * way Freedom does: base64 payload plus the span as a number. */
-function swarmProvider(chunks) {
+ * way Freedom does: base64 payload plus the span as a number. `delayMs`
+ * makes each answer async so `peak` (most calls in flight) means something. */
+function swarmProvider(chunks, { delayMs = 0 } = {}) {
   const calls = [];
-  return {
+  let inFlight = 0;
+  const provider = {
     isFreedomBrowser: true,
     calls,
+    peak: 0,
     async request({ method, params }) {
       calls.push(method);
       if (method !== 'swarm_readChunk') {
         throw Object.assign(new Error('Unknown method'), { code: 4200 });
       }
+      inFlight += 1;
+      provider.peak = Math.max(provider.peak, inFlight);
+      await new Promise((r) => setTimeout(r, delayMs));
+      inFlight -= 1;
       const c = chunks.get(params.reference);
       if (!c) {
         throw Object.assign(new Error(`Chunk not found: ${params.reference}`),
@@ -159,6 +166,7 @@ function swarmProvider(chunks) {
       };
     },
   };
+  return provider;
 }
 
 {
@@ -187,6 +195,29 @@ function swarmProvider(chunks) {
     await viaHttp.close();
   } finally {
     delete globalThis.swarm;
+  }
+
+  // a multi-chunk range is fetched concurrently, within the store's cap
+  {
+    const slow = swarmProvider(honest, { delayMs: 5 });
+    const store = new VerifiedChunkStore(slow, { maxConcurrency: 2 });
+    const all = await verifiedRead(store, fixture.db.ref, 0, fixture.db.size);
+    assert(Buffer.compare(Buffer.from(all), Buffer.from(content)) === 0 && slow.peak === 2,
+      `window.swarm: a full read runs chunks in parallel, capped (peak ${slow.peak} of 2)`);
+  }
+
+  // readahead widens a page miss into neighbouring pages, read in parallel
+  {
+    const slow = swarmProvider(honest, { delayMs: 5 });
+    const db = await open(bzzUrl, {
+      swarm: slow, readahead: 2, fetchFn: noHttp, moduleOptions: { wasmBinary } });
+    const rows = await db.query('SELECT title FROM posts WHERE id = 42');
+    const s = db.stats();
+    assert(rows.length === 1 && rows[0].title === 'Post 42: deterministic fixture row' &&
+      s.pagesFetched > s.readCount && slow.peak > 1,
+      `readahead: right row, ${s.pagesFetched} pages in ${s.readCount} reads, ` +
+      `peak ${slow.peak} chunks in flight`);
+    await db.close();
   }
 
   // the provider is not trusted either: a flipped payload byte is caught here

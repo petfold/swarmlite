@@ -19,6 +19,13 @@ are summarised from their commits.
   still BMT-verifies every chunk client-side. It accepts the page's own
   `bzz://<root>/<path>` URLs, `swarm: null` opts out, and the new
   `transport` field reports which path was taken.
+- **npm package: parallel verified reads.** The chunks a read needs are
+  fetched concurrently (at most 8 in flight, with duplicate requests
+  merged), and the tree walk remembers each subtree's child span instead
+  of fetching a first child to learn it. Together these cut the demo's
+  `window.swarm` session from 34 to 30 chunk reads. The new `readahead`
+  option (default 0) widens a page miss into its neighbours, trading
+  extra reads for fewer round trips.
 
 ### Changed
 

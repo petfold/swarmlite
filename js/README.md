@@ -50,9 +50,17 @@ db.transport; // 'window.swarm' (elsewhere: 'range' or 'verified /chunks')
 The URL must carry the 64-hex root (`bzz://<root>/…`), not an ENS name.
 Freedom limits public reads per origin to 120 requests / 512 KiB a minute,
 or 600 / 5 MiB once the page is connected with `swarm_requestAccess`.
-That covers a typical session (the demo's first screen reads 18 chunks /
-65 KB, and a search 16 more), but not a full-table scan. Pass
-`swarm: null` to force HTTP.
+That covers a typical session (the demo's first screen reads 16 chunks,
+and a search 14 more), but not a full-table scan. Pass `swarm: null` to
+force HTTP.
+
+Chunk reads run in parallel, up to 8 at a time, whenever one read spans
+several chunks. SQLite itself asks for one page at a time, though, so a
+query's latency is roughly its pages times the round trip.
+`readahead: n` widens each page miss by up to n uncached neighbouring
+pages, fetched together. On the demo at 300 ms per read, `readahead: 2`
+made the first screen 34% faster and a search 5% faster, but took 2.7× the reads, all
+counted against Freedom's budget. It's off by default.
 
 ## Publish (Node)
 

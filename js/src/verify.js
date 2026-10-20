@@ -103,16 +103,26 @@ export function decodeSpan(span) {
 /** Fetches raw chunks and verifies each against the reference it was
  * requested by. `source` is a gateway API URL (GET /chunks/{ref}) or a
  * window.swarm-style provider (swarm_readChunk). Content-addressed, so
- * the cache never goes stale. */
+ * the cache never goes stale. Up to `maxConcurrency` downloads run at
+ * once; concurrent requests for the same chunk share one download. */
 export class VerifiedChunkStore {
   #cache = new Map(); // ref hex -> Uint8Array (Map keeps LRU order)
+  #pending = new Map(); // ref hex -> Promise of the in-flight download
   #cacheChunks;
   #fetch;
+  #maxConcurrency;
+  #active = 0;
+  #waiting = []; // resolvers queued for a download slot
   apiUrl = null;
   provider = null;
   stats = { chunksFetched: 0, bytesFetched: 0 };
+  /** readTree's shape memo: an intermediate chunk's raw span bytes (hex)
+   * -> the span of each of its children but the last. A Bee tree's shape
+   * is fixed by size and redundancy level, both in those 8 bytes, so one
+   * probe serves every full subtree of that size. */
+  spanUnits = new Map();
 
-  constructor(source, { cacheChunks = 4096, fetchFn } = {}) {
+  constructor(source, { cacheChunks = 4096, fetchFn, maxConcurrency = 8 } = {}) {
     if (typeof source === 'string') {
       this.apiUrl = source.replace(/\/+$/, '');
     } else {
@@ -120,6 +130,7 @@ export class VerifiedChunkStore {
     }
     this.#cacheChunks = Math.max(1, cacheChunks);
     this.#fetch = fetchFn ?? ((...args) => globalThis.fetch(...args));
+    this.#maxConcurrency = Math.max(1, maxConcurrency);
   }
 
   /** One verified chunk (span + payload) by 64-hex reference. */
@@ -130,7 +141,17 @@ export class VerifiedChunkStore {
       this.#cache.set(refHex, hit);
       return hit;
     }
-    const data = await this.#download(refHex);
+    let pending = this.#pending.get(refHex);
+    if (!pending) {
+      pending = this.#fetchVerified(refHex)
+        .finally(() => this.#pending.delete(refHex));
+      this.#pending.set(refHex, pending);
+    }
+    return pending;
+  }
+
+  async #fetchVerified(refHex) {
+    const data = await this.#throttled(() => this.#download(refHex));
     if (toHex(chunkAddress(data)) !== refHex) {
       throw new VerificationError(
         `chunk ${refHex.slice(0, 16)}… failed verification: content does ` +
@@ -144,6 +165,22 @@ export class VerifiedChunkStore {
       this.#cache.delete(this.#cache.keys().next().value);
     }
     return data;
+  }
+
+  /** Run fn in one of the download slots; a finished download hands its
+   * slot straight to the next waiter, so the cap is never exceeded. */
+  async #throttled(fn) {
+    if (this.#active < this.#maxConcurrency) {
+      this.#active += 1;
+    } else {
+      await new Promise((resolve) => this.#waiting.push(resolve));
+    }
+    try {
+      return await fn();
+    } finally {
+      const next = this.#waiting.shift();
+      if (next) next(); else this.#active -= 1;
+    }
   }
 
   /** Raw chunk bytes (span + payload), not yet verified. */
@@ -207,8 +244,8 @@ export async function verifiedRead(store, refHex, start, end) {
   return out;
 }
 
-/** Append [start, end) of this subtree (both subtree-relative) into
- * out at outPos; returns bytes written. An intermediate chunk's payload
+/** Write [start, end) of this subtree (both subtree-relative) into out
+ * at outPos; returns bytes written. An intermediate chunk's payload
  * holds the data child references first (exactly ceil(span/unit)), then
  * parity references when erasure coding is on — those are ignored.
  *
@@ -216,7 +253,12 @@ export async function verifiedRead(store, refHex, start, end) {
  * rather than computed as a power of 128: with erasure coding the
  * effective fanout is smaller (seen live: 107 data + 21 parity refs per
  * intermediate on a redundancy-uploaded file), and every child but the
- * last spans the same unit — a Bee tree invariant this walk verifies. */
+ * last spans the same unit — a Bee tree invariant this walk verifies.
+ * That probe is a round trip, so its answer is memoized per span
+ * (store.spanUnits): every other full subtree of the same size skips it.
+ *
+ * The children a range needs are fetched and walked concurrently (the
+ * store caps how many downloads run); each writes its own slice of out. */
 async function readTree(store, chunk, start, end, out, outPos) {
   const size = decodeSpan(chunk.subarray(0, 8));
   const payload = chunk.subarray(8);
@@ -228,12 +270,19 @@ async function readTree(store, chunk, start, end, out, outPos) {
   if (payload.length < REF_SIZE) {
     throw new VerificationError('intermediate chunk has no child references');
   }
-  const first = await store.chunk(toHex(payload.subarray(0, REF_SIZE)));
-  const unit = decodeSpan(first.subarray(0, 8));
-  if (unit <= 0 || unit >= size) {
-    throw new VerificationError(
-      `first child spans ${unit} of a ${size}-byte subtree — not a valid tree`,
-    );
+  const childRef = (i) => toHex(payload.subarray(i * REF_SIZE, (i + 1) * REF_SIZE));
+  const spanKey = toHex(chunk.subarray(0, 8));
+  let unit = store.spanUnits?.get(spanKey);
+  let first = null;
+  if (unit === undefined) {
+    first = await store.chunk(childRef(0));
+    unit = decodeSpan(first.subarray(0, 8));
+    if (unit <= 0 || unit >= size) {
+      throw new VerificationError(
+        `first child spans ${unit} of a ${size}-byte subtree — not a valid tree`,
+      );
+    }
+    store.spanUnits?.set(spanKey, unit);
   }
   const nData = Math.ceil(size / unit);
   if (payload.length < nData * REF_SIZE) {
@@ -242,27 +291,29 @@ async function readTree(store, chunk, start, end, out, outPos) {
       `references but its span requires ${nData}`,
     );
   }
-  let written = 0;
-  for (let i = Math.floor(start / unit); i < nData; i++) {
+  const iFirst = Math.floor(start / unit);
+  const iLast = Math.min(nData, Math.ceil(end / unit)) - 1;
+  const parts = [];
+  for (let i = iFirst; i <= iLast; i++) {
     const lo = i * unit;
-    if (lo >= end) break;
     const hi = Math.min(lo + unit, size);
-    const child = i === 0
-      ? first
-      : await store.chunk(toHex(payload.subarray(i * REF_SIZE, (i + 1) * REF_SIZE)));
-    const childSpan = decodeSpan(child.subarray(0, 8));
-    if (childSpan !== hi - lo) {
-      throw new VerificationError(
-        `child chunk span ${childSpan} does not match its position in ` +
-        `the tree (expected ${hi - lo})`,
+    parts.push((async () => {
+      const child = i === 0 && first ? first : await store.chunk(childRef(i));
+      const childSpan = decodeSpan(child.subarray(0, 8));
+      if (childSpan !== hi - lo) {
+        throw new VerificationError(
+          `child chunk span ${childSpan} does not match its position in ` +
+          `the tree (expected ${hi - lo})`,
+        );
+      }
+      return readTree(
+        store, child, Math.max(start, lo) - lo, Math.min(end, hi) - lo,
+        out, outPos + Math.max(start, lo) - start,
       );
-    }
-    written += await readTree(
-      store, child, Math.max(start, lo) - lo, Math.min(end, hi) - lo,
-      out, outPos + written,
-    );
+    })());
   }
-  return written;
+  const written = await Promise.all(parts);
+  return written.reduce((a, b) => a + b, 0);
 }
 
 // ---- single-owner chunks (feed updates) -----------------------------------
