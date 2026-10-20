@@ -1,5 +1,5 @@
 // Minimal static file server with HTTP Range support, for running the
-// smoke test with no Bee node (docs/roadmap.md: offline determinism):
+// smoke test with no Bee node (ROADMAP.md: offline determinism):
 //
 //   node js/test/serve.mjs <dir> [port]        # then
 //   node js/test/smoke.mjs http://localhost:8977/demo.db
