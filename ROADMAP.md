@@ -113,9 +113,14 @@ Goal: the same lazy-page trick inside SQLite-WASM in a browser.
 **Exit criterion: MET** — measured via the Node smoke test against the
 live gateway, and confirmed in a real browser (Brave, 2026-07-24):
 posts load, keyword search works, the status line reports per-query
-page counts. Live demo root (republished 2026-07-25 on a 28-day
-batch, now shipping the verified reader):
-`d1d54686def7f40714d093f2d8c4a2739d6d905d16b834b41f04b7128be8690b`.
+page counts. Live demo root (republished 2026-10-20 with wa-sqlite
+1.1.2 / SQLite 3.53.0; it lives as long as batch `c931c8a5…`, about
+2026-11-09 unless topped up):
+`8b08943b95357643f3a11448eff141294c4975481dba8b5d8a14866bb6f6c3a4`.
+Re-measured on Bee 2.8.3 with the new engine: the same 5 reads / 20 KB
+cold and 23 pages / 92 KB per session. The previous root (`d1d54686…`,
+2026-07-25, 28-day batch) expired with its batch, which is the case
+for recording which batch keeps which root alive (v2.3, still open).
 
 ## v2.1 — client-side verification (JS)
 
