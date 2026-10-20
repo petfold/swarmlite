@@ -37,6 +37,31 @@ const db = await open(`${api}/bzz/${reference}/site.db`, { verify: true });
 In Node, pass the wasm explicitly:
 `open(url, { moduleOptions: { wasmBinary: await readFile(...) } })`.
 
+In [Freedom Browser](https://freedom.baby/), `open()` reads through the
+injected `window.swarm` provider (`swarm_readChunk`) instead of HTTP,
+since that's the only route a page there has to the node. Each chunk is
+still BMT-verified client-side. A page's own relative URL works as-is:
+
+```js
+const db = await open(new URL('site.db', location.href).href); // bzz://<root>/site.db
+db.transport; // 'window.swarm' (elsewhere: 'range' or 'verified /chunks')
+```
+
+The URL must carry the 64-hex root (`bzz://<root>/…`), not an ENS name.
+Freedom limits public reads per origin to 120 requests / 512 KiB a minute,
+or 600 / 5 MiB once the page is connected with `swarm_requestAccess`.
+That covers a typical session (the demo's first screen reads 16 chunks,
+and a search 14 more), but not a full-table scan. Pass `swarm: null` to
+force HTTP.
+
+Chunk reads run in parallel, up to 8 at a time, whenever one read spans
+several chunks. SQLite itself asks for one page at a time, though, so a
+query's latency is roughly its pages times the round trip.
+`readahead: n` widens each page miss by up to n uncached neighbouring
+pages, fetched together. On the demo at 300 ms per read, `readahead: 2`
+made the first screen 34% faster and a search 5% faster, but took 2.7× the reads, all
+counted against Freedom's budget. It's off by default.
+
 ## Publish (Node)
 
 ```js

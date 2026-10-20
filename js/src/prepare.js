@@ -41,9 +41,9 @@ export async function prepare(bytes, { moduleOptions } = {}) {
   }
 
   modulePromise ??= SQLiteAsyncESMFactory(moduleOptions);
-  const sqlite3 = SQLite.Factory(await modulePromise);
-  const vfs = new MemVFS();
-  vfs.name = `swarmlite-mem-${++vfsCounter}`;
+  const module = await modulePromise;
+  const sqlite3 = SQLite.Factory(module);
+  const vfs = new MemVFS(`swarmlite-mem-${++vfsCounter}`, module);
   vfs.put('work.db', bytes);
   sqlite3.vfs_register(vfs, false);
   const db = await sqlite3.open_v2(

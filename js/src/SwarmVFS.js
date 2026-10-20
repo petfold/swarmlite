@@ -2,8 +2,8 @@
 // range reads. The JS twin of swarmlite/vfs.py — same design, same
 // counters (docs/DESIGN.md section 4).
 //
-// Works with wa-sqlite's Asyncify build: VFS methods may return
-// handleAsync(async () => ...), so page fetches are ordinary async
+// Works with wa-sqlite's Asyncify build: FacadeVFS treats any `async`
+// jXxx method as asynchronous, so page fetches are ordinary async
 // fetch() calls — no SharedArrayBuffer, no COOP/COEP headers.
 //
 // The "filename" SQLite opens is a URL: anything a gateway serves with
@@ -17,6 +17,7 @@
 // Chunk-level BMT verification is a documented follow-up (roadmap):
 // against a local light node, retrieved chunks are verified by the node.
 
+import { FacadeVFS } from '../vendor/wa-sqlite/src/FacadeVFS.js';
 import * as VFS from '../vendor/wa-sqlite/src/VFS.js';
 
 export const PAGE_SIZE = 4096; // SQLite default page == Swarm chunk
@@ -25,9 +26,8 @@ const MAX_RUN_PAGES = 16; // cap one Range request at 64 KiB — big ranges
                           // are the ones gateways abort on fresh content
 const FETCH_TIMEOUT_MS = 30_000;
 
-export class SwarmVFS extends VFS.Base {
-  name = 'swarmlite';
-  mxPathName = 1024; // filenames are URLs
+export class SwarmVFS extends FacadeVFS {
+  mxPathname = 1024; // filenames are URLs
 
   /** @type {Map<number, object>} sqlite3_file id -> open file state */
   #files = new Map();
@@ -36,17 +36,21 @@ export class SwarmVFS extends VFS.Base {
   /** @type {Map<string, object>} short alias -> {size, read} source */
   #sources = new Map();
   #cachePages;
+  #readahead;
   #fetch;
 
-  constructor({ cachePages = DEFAULT_CACHE_PAGES, fetchFn } = {}) {
-    super();
+  /** @param {string} name - VFS name to register under (unique per instance)
+   * @param {object} module - the wa-sqlite module from SQLiteAsyncESMFactory */
+  constructor(name, module, { cachePages = DEFAULT_CACHE_PAGES, readahead = 0, fetchFn } = {}) {
+    super(name, module);
     this.#cachePages = Math.max(1, cachePages);
+    this.#readahead = Math.max(0, Math.floor(readahead));
     this.#fetch = fetchFn ?? ((...args) => globalThis.fetch(...args));
   }
 
   /** Map a short alias to a database URL. SQLite opens the alias; the
    * VFS fetches the URL. Necessary because VFS filename length is
-   * limited (mxPathName can be as small as 64 in some builds), and it
+   * limited (mxPathname defaults to 64 in wa-sqlite), and it
    * keeps URLs out of SQLite's filename handling entirely. */
   registerUrl(alias, url) {
     this.#urls.set(alias, url);
@@ -60,106 +64,102 @@ export class SwarmVFS extends VFS.Base {
     this.#sources.set(alias, source);
   }
 
-  xOpen(name, fileId, flags, pOutFlags) {
-    return this.handleAsync(async () => {
-      if (!(flags & VFS.SQLITE_OPEN_MAIN_DB)) {
-        return VFS.SQLITE_CANTOPEN; // no journals, no temp files
-      }
-      const source = this.#sources.get(name);
-      const url = this.#urls.get(name) ?? name;
-      try {
-        let size;
-        if (source) {
-          size = source.size;
-        } else {
-          // one 1-byte range read: existence check + total size
-          const resp = await this.#fetch(url, {
-            headers: { Range: 'bytes=0-0' },
-          });
-          size = contentRangeTotal(resp);
-          if (size === null) {
-            console.error(
-              `swarmlite: ${url} -> HTTP ${resp.status}, ` +
-              `Content-Range ${resp.headers.get('content-range')} — ` +
-              `need a gateway URL with Range support`,
-            );
-            return VFS.SQLITE_CANTOPEN;
-          }
-        }
-        this.#files.set(fileId, {
-          alias: name,
-          url,
-          source,
-          size,
-          cache: new Map(), // page index -> Uint8Array (Map keeps LRU order)
-          stats: { readCount: 0, pagesFetched: 0, bytesFetched: 0, fileSize: size },
+  async jOpen(name, fileId, flags, pOutFlags) {
+    if (!(flags & VFS.SQLITE_OPEN_MAIN_DB)) {
+      return VFS.SQLITE_CANTOPEN; // no journals, no temp files
+    }
+    const source = this.#sources.get(name);
+    const url = this.#urls.get(name) ?? name;
+    try {
+      let size;
+      if (source) {
+        size = source.size;
+      } else {
+        // one 1-byte range read: existence check + total size
+        const resp = await this.#fetch(url, {
+          headers: { Range: 'bytes=0-0' },
         });
-        pOutFlags.setInt32(0, VFS.SQLITE_OPEN_READONLY, true);
-        return VFS.SQLITE_OK;
-      } catch (e) {
-        console.error(`swarmlite: open ${url} failed:`, e);
-        return VFS.SQLITE_CANTOPEN;
+        size = contentRangeTotal(resp);
+        if (size === null) {
+          console.error(
+            `swarmlite: ${url} -> HTTP ${resp.status}, ` +
+            `Content-Range ${resp.headers.get('content-range')} — ` +
+            `need a gateway URL with Range support`,
+          );
+          return VFS.SQLITE_CANTOPEN;
+        }
       }
-    });
+      this.#files.set(fileId, {
+        alias: name,
+        url,
+        source,
+        size,
+        cache: new Map(), // page index -> Uint8Array (Map keeps LRU order)
+        stats: { readCount: 0, pagesFetched: 0, bytesFetched: 0, fileSize: size },
+      });
+      pOutFlags.setInt32(0, VFS.SQLITE_OPEN_READONLY, true);
+      return VFS.SQLITE_OK;
+    } catch (e) {
+      console.error(`swarmlite: open ${url} failed:`, e);
+      return VFS.SQLITE_CANTOPEN;
+    }
   }
 
-  xClose(fileId) {
+  jClose(fileId) {
     this.#files.delete(fileId);
     return VFS.SQLITE_OK;
   }
 
-  xRead(fileId, pData, iOffset) {
-    return this.handleAsync(async () => {
-      const file = this.#files.get(fileId);
-      if (!file) return VFS.SQLITE_IOERR;
-      try {
-        const wanted = Math.min(iOffset + pData.byteLength, file.size) - iOffset;
-        if (wanted > 0) {
-          const data = await this.#readRange(file, iOffset, wanted);
-          pData.set(data, 0);
-        }
-        if (wanted < pData.byteLength) {
-          // short read past EOF: zero-fill, per SQLite contract
-          pData.fill(0, Math.max(wanted, 0));
-          return VFS.SQLITE_IOERR_SHORT_READ;
-        }
-        return VFS.SQLITE_OK;
-      } catch (e) {
-        console.error(`swarmlite: read @${iOffset} failed:`, e);
-        return VFS.SQLITE_IOERR;
+  async jRead(fileId, pData, iOffset) {
+    const file = this.#files.get(fileId);
+    if (!file) return VFS.SQLITE_IOERR;
+    try {
+      const wanted = Math.min(iOffset + pData.byteLength, file.size) - iOffset;
+      if (wanted > 0) {
+        const data = await this.#readRange(file, iOffset, wanted);
+        pData.set(data, 0);
       }
-    });
+      if (wanted < pData.byteLength) {
+        // short read past EOF: zero-fill, per SQLite contract
+        pData.fill(0, Math.max(wanted, 0));
+        return VFS.SQLITE_IOERR_SHORT_READ;
+      }
+      return VFS.SQLITE_OK;
+    } catch (e) {
+      console.error(`swarmlite: read @${iOffset} failed:`, e);
+      return VFS.SQLITE_IOERR;
+    }
   }
 
-  xFileSize(fileId, pSize64) {
+  jFileSize(fileId, pSize64) {
     const file = this.#files.get(fileId);
     if (!file) return VFS.SQLITE_IOERR;
     pSize64.setBigInt64(0, BigInt(file.size), true);
     return VFS.SQLITE_OK;
   }
 
-  xAccess(name, flags, pResOut) {
+  jAccess(name, flags, pResOut) {
     pResOut.setInt32(0, 0, true); // journals/WAL never exist
     return VFS.SQLITE_OK;
   }
 
-  xSectorSize(fileId) {
+  jSectorSize(fileId) {
     return PAGE_SIZE;
   }
 
-  xDeviceCharacteristics(fileId) {
+  jDeviceCharacteristics(fileId) {
     return VFS.SQLITE_IOCAP_IMMUTABLE; // content-addressed: never changes
   }
 
-  xWrite() {
+  jWrite() {
     return VFS.SQLITE_READONLY;
   }
 
-  xTruncate() {
+  jTruncate() {
     return VFS.SQLITE_READONLY;
   }
 
-  xDelete() {
+  jDelete() {
     return VFS.SQLITE_READONLY;
   }
 
@@ -210,7 +210,9 @@ export class SwarmVFS extends VFS.Base {
   // ---- paging ------------------------------------------------------------
 
   /** Serve [offset, offset+length) from the page cache, fetching each
-   * contiguous run of missing pages with a single Range request. */
+   * contiguous run of missing pages with a single Range request — widened
+   * by up to `readahead` uncached pages on each side, since SQLite reads
+   * neighbouring pages one at a time (and some scans walk backwards). */
   async #readRange(file, offset, length) {
     const first = Math.floor(offset / PAGE_SIZE);
     const last = Math.floor((offset + length - 1) / PAGE_SIZE);
@@ -230,15 +232,22 @@ export class SwarmVFS extends VFS.Base {
       if (pages.has(i)) { i++; continue; }
       let j = i;
       while (j <= last && !pages.has(j) && j - i < MAX_RUN_PAGES) j++;
-      const from = i * PAGE_SIZE;
-      const to = Math.min(j * PAGE_SIZE, file.size) - 1;
+      let lo = i;
+      let hi = j;
+      const pageCount = Math.ceil(file.size / PAGE_SIZE);
+      while (lo > 0 && i - lo < this.#readahead && !file.cache.has(lo - 1) &&
+             hi - lo < MAX_RUN_PAGES) lo--;
+      while (hi < pageCount && hi - j < this.#readahead && !file.cache.has(hi) &&
+             hi - lo < MAX_RUN_PAGES) hi++;
+      const from = lo * PAGE_SIZE;
+      const to = Math.min(hi * PAGE_SIZE, file.size) - 1;
       const blob = file.source
         ? await file.source.read(from, to)
         : await this.#fetchRange(file.url, from, to);
       file.stats.readCount += 1;
       file.stats.bytesFetched += blob.byteLength;
-      for (let k = i; k < j; k++) {
-        const page = blob.subarray((k - i) * PAGE_SIZE, (k - i + 1) * PAGE_SIZE);
+      for (let k = lo; k < hi; k++) {
+        const page = blob.subarray((k - lo) * PAGE_SIZE, (k - lo + 1) * PAGE_SIZE);
         pages.set(k, page);
         file.cache.set(k, page);
         file.stats.pagesFetched += 1;

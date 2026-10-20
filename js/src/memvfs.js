@@ -4,6 +4,7 @@
 // finished bytes are read back out. Fully synchronous — no Asyncify
 // round trips — and never touches disk or network.
 
+import { FacadeVFS } from '../vendor/wa-sqlite/src/FacadeVFS.js';
 import * as VFS from '../vendor/wa-sqlite/src/VFS.js';
 
 class MemFile {
@@ -18,9 +19,8 @@ class MemFile {
   }
 }
 
-export class MemVFS extends VFS.Base {
-  name = 'swarmlite-mem';
-  mxPathName = 512;
+export class MemVFS extends FacadeVFS {
+  mxPathname = 512;
 
   /** @type {Map<string, MemFile>} filename -> contents */
   files = new Map();
@@ -41,7 +41,7 @@ export class MemVFS extends VFS.Base {
     return f ? f.data.slice(0, f.size) : null;
   }
 
-  xOpen(name, fileId, flags, pOutFlags) {
+  jOpen(name, fileId, flags, pOutFlags) {
     name = name ?? `temp-${fileId}`; // anonymous temp files
     let file = this.files.get(name);
     if (!file) {
@@ -57,14 +57,14 @@ export class MemVFS extends VFS.Base {
     return VFS.SQLITE_OK;
   }
 
-  xClose(fileId) {
+  jClose(fileId) {
     const entry = this.#open.get(fileId);
     this.#open.delete(fileId);
     if (entry?.deleteOnClose) this.files.delete(entry.name);
     return VFS.SQLITE_OK;
   }
 
-  xRead(fileId, pData, iOffset) {
+  jRead(fileId, pData, iOffset) {
     const { file } = this.#open.get(fileId);
     const available = Math.max(file.size - iOffset, 0);
     const n = Math.min(pData.byteLength, available);
@@ -76,36 +76,39 @@ export class MemVFS extends VFS.Base {
     return VFS.SQLITE_OK;
   }
 
-  xWrite(fileId, pData, iOffset) {
+  jWrite(fileId, pData, iOffset) {
     const { file } = this.#open.get(fileId);
     file.ensure(iOffset + pData.byteLength);
-    file.data.set(pData, iOffset);
+    // pData is wa-sqlite's buffer proxy, not a Uint8Array: set() would
+    // treat it as an array-like with no elements and copy zeros, so take
+    // a real view with subarray()
+    file.data.set(pData.subarray(), iOffset);
     file.size = Math.max(file.size, iOffset + pData.byteLength);
     return VFS.SQLITE_OK;
   }
 
-  xTruncate(fileId, iSize) {
+  jTruncate(fileId, iSize) {
     const { file } = this.#open.get(fileId);
     file.size = Math.min(file.size, iSize);
     return VFS.SQLITE_OK;
   }
 
-  xFileSize(fileId, pSize64) {
+  jFileSize(fileId, pSize64) {
     const { file } = this.#open.get(fileId);
     pSize64.setBigInt64(0, BigInt(file.size), true);
     return VFS.SQLITE_OK;
   }
 
-  xSync() {
+  jSync() {
     return VFS.SQLITE_OK; // RAM is always "synced"
   }
 
-  xDelete(name) {
+  jDelete(name) {
     this.files.delete(name);
     return VFS.SQLITE_OK;
   }
 
-  xAccess(name, flags, pResOut) {
+  jAccess(name, flags, pResOut) {
     pResOut.setInt32(0, this.files.has(name) ? 1 : 0, true);
     return VFS.SQLITE_OK;
   }

@@ -9,6 +9,44 @@ that had served as the only record until then (0.2.1 keeps its original
 wording). 0.1.0 and 0.2.0 had no notes beyond a compare link, so their entries
 are summarised from their commits.
 
+## [Unreleased]
+
+### Added
+
+- **npm package: Freedom Browser support.** In Freedom, `open()` reads
+  chunk by chunk through the injected `window.swarm` provider
+  (`swarm_readChunk`), the only route a page there has to the node, and
+  still BMT-verifies every chunk client-side. It accepts the page's own
+  `bzz://<root>/<path>` URLs, `swarm: null` opts out, and the new
+  `transport` field reports which path was taken.
+- **npm package: parallel verified reads.** The chunks a read needs are
+  fetched concurrently (at most 8 in flight, with duplicate requests
+  merged), and the tree walk remembers each subtree's child span instead
+  of fetching a first child to learn it. Together these cut the demo's
+  `window.swarm` session from 34 to 30 chunk reads. The new `readahead`
+  option (default 0) widens a page miss into its neighbours, trading
+  extra reads for fewer round trips.
+
+### Fixed
+
+- **npm package: overlapping queries.** A query started while another was
+  waiting on a page read (a search box firing on each keystroke, say) made
+  SQLite read the wrong pages: "database disk image is malformed", or a
+  crash inside wasm. wa-sqlite's async build can only pause one call at a
+  time, across every open database, so `open()`, `query()` and `close()`
+  now queue. It showed up in Freedom, where a search through
+  `window.swarm` takes seconds; over HTTP the window was just narrower.
+  The demo now runs only the newest search term and shows query errors.
+
+### Changed
+
+- **npm package:** the browser reader and the JS publisher now run SQLite
+  3.53.0 (vendored wa-sqlite 1.1.2, from 1.0.0 / SQLite 3.44.0). wa-sqlite
+  1.0.0 is still the newest release on npm, so the files now come from the
+  GitHub tag. Breaking for code that builds a `SwarmVFS` itself: the
+  constructor is now `new SwarmVFS(name, module, options)`, following
+  wa-sqlite's new `FacadeVFS` base class. `open()` callers are unaffected.
+
 ## [0.3.1] — 2026-08-04
 
 ### Added

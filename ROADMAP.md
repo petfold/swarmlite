@@ -113,9 +113,28 @@ Goal: the same lazy-page trick inside SQLite-WASM in a browser.
 **Exit criterion: MET** — measured via the Node smoke test against the
 live gateway, and confirmed in a real browser (Brave, 2026-07-24):
 posts load, keyword search works, the status line reports per-query
-page counts. Live demo root (republished 2026-07-25 on a 28-day
-batch, now shipping the verified reader):
-`d1d54686def7f40714d093f2d8c4a2739d6d905d16b834b41f04b7128be8690b`.
+page counts. Live demo root (republished 2026-10-20 with wa-sqlite
+1.1.2 / SQLite 3.53.0, the window.swarm reader and the query queue; it
+lives as long as batch `c931c8a5…`, about 2026-11-09 unless topped up):
+`f54bac5b74d06e0480c297174224dc86c34e2a41042bf1828cc78d56c92c1f10`.
+Checked in Freedom (bundled Ant) typing "query", "page" and "feed" one
+key per 400 ms: each search returns its 10 posts, no errors.
+Re-measured on Bee 2.8.3 with the new engine: the same 5 reads / 20 KB
+cold and 23 pages / 92 KB per session. In Freedom Browser (its own Ant
+node, cold start) the same page reads through `window.swarm`: open plus
+the first screen in 39 s, then 9 pages (52 KB) in 5.9 s and a search of
+12 pages (64 KB) in 8.0 s, against ~150 ms per query over Range reads.
+Measured with a 300 ms stand-in afterwards: SQLite asks for one page per
+read (22 single-page reads for the session), so per-query time is pages ×
+round trip. Remembering subtree spans and fetching concurrently took the
+session from 34 to 30 chunk reads (about 15% faster). Opt-in `readahead`
+fetches neighbouring pages in parallel (up to 8 in flight), but nearly
+triples the reads (2.7× at `readahead: 2`) for a 5–34% gain. The remaining lever is fewer round trips per
+page: either an Ant-side cache warmed by prefetching the intermediate
+level (≈100 chunks for this file, affordable only on a connected origin's
+budget), or a provider method that returns a byte range in one call. The previous root (`d1d54686…`,
+2026-07-25, 28-day batch) expired with its batch, which is the case
+for recording which batch keeps which root alive (v2.3, still open).
 
 ## v2.1 — client-side verification (JS)
 

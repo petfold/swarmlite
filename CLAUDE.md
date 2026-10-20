@@ -148,7 +148,8 @@ the feed URL.
 - **`swarmfs` floor is a real dependency decision**, not boilerplate: raise
   it in the same commit that starts using new swarmfs API, or a fresh
   install resolves an older swarmfs and fails at import (currently
-  `>= 0.4.0` for the stamp-lifecycle surface).
+  `>= 0.7.1`: the stamp-lifecycle surface needs 0.4.0, the
+  `fs.transaction` exit fix needs 0.7.1 — see constraint 2).
 
 ## Style
 

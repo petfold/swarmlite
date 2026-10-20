@@ -6,8 +6,8 @@ Layout under the published root (everything relative, fully
 self-contained — page, reader, wasm and database under one hash):
 
     index.html  app.js  demo.db
-    src/{index.js, SwarmVFS.js}
-    vendor/wa-sqlite/{dist/*, src/*}
+    src/*.js
+    vendor/{wa-sqlite/dist, wa-sqlite/src, js-sha3, noble-secp256k1}/*
 
 Prints the site URL on the local gateway.
 """
@@ -30,9 +30,11 @@ def assemble(site: Path, rows: int) -> None:
     shutil.copy(js / "demo" / "index.html", site / "index.html")
     shutil.copy(js / "demo" / "app.js", site / "app.js")
     shutil.copytree(js / "src", site / "src")
-    vendor = site / "vendor" / "wa-sqlite"
-    shutil.copytree(js / "vendor" / "wa-sqlite" / "dist", vendor / "dist")
-    shutil.copytree(js / "vendor" / "wa-sqlite" / "src", vendor / "src")
+    # everything src/ imports: wa-sqlite, plus js-sha3 and noble-secp256k1
+    # for feeds and verification (src/feeds.js, src/verify.js)
+    vendor = site / "vendor"
+    for sub in ("wa-sqlite/dist", "wa-sqlite/src", "js-sha3", "noble-secp256k1"):
+        shutil.copytree(js / "vendor" / sub, vendor / sub)
     (site / "demo.db").write_bytes(build(rows=rows))
 
 
