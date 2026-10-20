@@ -494,8 +494,8 @@ software, no browser extension: any modern browser opens the page.
 (Somebody's Bee node/gateway has to *serve* the content, e.g. your
 Swarm Desktop node at `localhost:1633` or a public gateway.)
 
-Everything is vendored (wa-sqlite 1.0.0 Asyncify build, js-sha3 for
-topic hashing), so the page, the reader, the wasm engine and the
+Everything is vendored (wa-sqlite 1.1.2 Asyncify build — SQLite
+3.53.0 — and js-sha3 for topic hashing), so the page, the reader, the wasm engine and the
 database publish together under **one immutable root** — the site
 carries its own database, all URLs relative.
 

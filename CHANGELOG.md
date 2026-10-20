@@ -9,6 +9,17 @@ that had served as the only record until then (0.2.1 keeps its original
 wording). 0.1.0 and 0.2.0 had no notes beyond a compare link, so their entries
 are summarised from their commits.
 
+## [Unreleased]
+
+### Changed
+
+- **npm package:** the browser reader and the JS publisher now run SQLite
+  3.53.0 (vendored wa-sqlite 1.1.2, from 1.0.0 / SQLite 3.44.0). wa-sqlite
+  1.0.0 is still the newest release on npm, so the files now come from the
+  GitHub tag. Breaking for code that builds a `SwarmVFS` itself: the
+  constructor is now `new SwarmVFS(name, module, options)`, following
+  wa-sqlite's new `FacadeVFS` base class. `open()` callers are unaffected.
+
 ## [0.3.1] — 2026-08-04
 
 ### Added

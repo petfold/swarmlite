@@ -35,11 +35,10 @@ export async function open(url, { cachePages, moduleOptions, verify = false, fet
   const module = await modulePromise;
   const sqlite3 = SQLite.Factory(module);
 
-  const vfs = new SwarmVFS({ cachePages, fetchFn });
   // register a unique VFS name per open (each VFS instance carries its
   // own cache/stats), and open via a short alias — SQLite VFS filename
   // buffers can be as small as 64 bytes, too short for gateway URLs
-  vfs.name = `swarmlite-${++aliasCounter}`;
+  const vfs = new SwarmVFS(`swarmlite-${++aliasCounter}`, module, { cachePages, fetchFn });
   const alias = `db-${aliasCounter}`;
   let chunkStore = null;
   if (verify) {
