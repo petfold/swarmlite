@@ -11,6 +11,15 @@ are summarised from their commits.
 
 ## [Unreleased]
 
+### Added
+
+- **npm package: Freedom Browser support.** In Freedom, `open()` reads
+  chunk by chunk through the injected `window.swarm` provider
+  (`swarm_readChunk`), the only route a page there has to the node, and
+  still BMT-verifies every chunk client-side. It accepts the page's own
+  `bzz://<root>/<path>` URLs, `swarm: null` opts out, and the new
+  `transport` field reports which path was taken.
+
 ### Changed
 
 - **npm package:** the browser reader and the JS publisher now run SQLite

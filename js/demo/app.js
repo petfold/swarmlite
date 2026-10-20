@@ -20,7 +20,8 @@ function reportDelta(label, t0) {
   const ms = (performance.now() - t0).toFixed(0);
   status(
     `${label}: fetched <b>${pages} pages</b> (${fmtKB(bytes)}) ` +
-    `of a ${fmtMB(s.fileSize)} database · ${ms} ms`,
+    `of a ${fmtMB(s.fileSize)} database · ${ms} ms` +
+    (db.transport === 'window.swarm' ? ' · via window.swarm' : ''),
   );
   before = s;
 }

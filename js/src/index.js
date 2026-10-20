@@ -21,16 +21,30 @@ export { VerificationError } from './verify.js';
 let modulePromise = null;
 let aliasCounter = 0;
 
+/** Freedom Browser injects window.swarm: the only route a page has to
+ * the node (its local HTTP API is blocked to web content). */
+const freedomProvider = () =>
+  globalThis.swarm?.isFreedomBrowser === true ? globalThis.swarm : null;
+
 /** Open a read-only lazy connection to a database URL (gateway URL with
- * Range support). Returns { query, stats, close, sqlite3, db, vfs }.
+ * Range support). Returns { query, stats, close, transport, sqlite3, db, vfs }.
  *
  * With `verify: true` every byte is checked against the 32-byte root in
  * the URL: the manifest is resolved client-side and pages are read
  * chunk-by-chunk via /chunks, each BMT-verified — safe against a
  * tampering gateway, at the cost of one request per 4 KB chunk (a local
  * light node verifies natively, so the default fast path is fine
- * there). Requires a '<api>/bzz/<64-hex root>/<path>' URL. */
-export async function open(url, { cachePages, moduleOptions, verify = false, fetchFn } = {}) {
+ * there). Requires a '<api>/bzz/<64-hex root>/<path>' URL.
+ *
+ * In Freedom Browser (`window.swarm` present) chunks are read the same
+ * verified way but through `swarm.readChunk` instead of HTTP, so the
+ * URL may also be 'bzz://<64-hex root>/<path>' — what a page's own
+ * relative URLs resolve to there. Pass another window.swarm-style
+ * provider as `swarm`, or `swarm: null` to use HTTP anyway.
+ * `transport` on the result says which path was taken. */
+export async function open(url, {
+  cachePages, moduleOptions, verify = false, fetchFn, swarm = freedomProvider(),
+} = {}) {
   modulePromise ??= SQLiteAsyncESMFactory(moduleOptions);
   const module = await modulePromise;
   const sqlite3 = SQLite.Factory(module);
@@ -41,16 +55,18 @@ export async function open(url, { cachePages, moduleOptions, verify = false, fet
   const vfs = new SwarmVFS(`swarmlite-${++aliasCounter}`, module, { cachePages, fetchFn });
   const alias = `db-${aliasCounter}`;
   let chunkStore = null;
-  if (verify) {
-    const m = /^(.+?)\/bzz\/([0-9a-fA-F]{64})\/(.+)$/.exec(url);
-    if (!m) {
+  if (verify || swarm) {
+    const m = /^(?:(.+?)\/bzz\/|bzz:\/\/)([0-9a-fA-F]{64})\/(.+)$/.exec(url);
+    if (!m || (!swarm && !m[1])) {
       throw new Error(
-        `verify: true needs a '<api>/bzz/<64-hex root>/<path>' URL to ` +
-        `know what to verify against, got ${url}`,
+        `${swarm ? 'reading through window.swarm' : 'verify: true'} needs a ` +
+        `'<api>/bzz/<64-hex root>/<path>' URL` +
+        `${swarm ? " or 'bzz://<64-hex root>/<path>'" : ''} to know what to ` +
+        `verify against, got ${url}`,
       );
     }
     const [, api, root, path] = m;
-    chunkStore = new VerifiedChunkStore(api, { fetchFn });
+    chunkStore = new VerifiedChunkStore(swarm ?? api, { fetchFn });
     const nodes = new NodeStore((ref) => verifiedRead(chunkStore, ref));
     const entry = await lookupPath(nodes, root.toLowerCase(), path);
     if (!entry) {
@@ -85,6 +101,7 @@ export async function open(url, { cachePages, moduleOptions, verify = false, fet
 
   return {
     query,
+    transport: swarm ? 'window.swarm' : verify ? 'verified /chunks' : 'range',
     // verified mode adds chunk-level counters (network = chunk bytes,
     // including intermediate tree/manifest chunks)
     stats: () => ({ ...vfs.statsFor(alias), ...(chunkStore?.stats ?? {}) }),

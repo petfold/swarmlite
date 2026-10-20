@@ -133,6 +133,82 @@ const content = b64(fixture.db.content);
     'verify without a bzz root URL fails loudly');
 }
 
+// ---- Freedom Browser: reads through window.swarm ----------------------------
+
+/** A window.swarm stand-in answering swarm_readChunk from a chunk map the
+ * way Freedom does: base64 payload plus the span as a number. */
+function swarmProvider(chunks) {
+  const calls = [];
+  return {
+    isFreedomBrowser: true,
+    calls,
+    async request({ method, params }) {
+      calls.push(method);
+      if (method !== 'swarm_readChunk') {
+        throw Object.assign(new Error('Unknown method'), { code: 4200 });
+      }
+      const c = chunks.get(params.reference);
+      if (!c) {
+        throw Object.assign(new Error(`Chunk not found: ${params.reference}`),
+          { code: -32602, data: { reason: 'chunk_not_found' } });
+      }
+      return {
+        data: Buffer.from(c.subarray(8)).toString('base64'),
+        encoding: 'base64',
+        span: Number(new DataView(c.buffer, c.byteOffset, 8).getBigUint64(0, true)),
+      };
+    },
+  };
+}
+
+{
+  const wasmBinary = await readFile(
+    new URL('../vendor/wa-sqlite/dist/wa-sqlite-async.wasm', import.meta.url));
+  const noHttp = () => { throw new Error('HTTP used despite window.swarm'); };
+  const bzzUrl = `bzz://${fixture.manifest.root}/${fixture.manifest.path}`;
+
+  // auto-detected, as a page in Freedom gets it: no option passed
+  const swarm = swarmProvider(honest);
+  globalThis.swarm = swarm;
+  try {
+    const db = await open(bzzUrl, { fetchFn: noHttp, moduleOptions: { wasmBinary } });
+    const rows = await db.query('SELECT title FROM posts WHERE id = 42');
+    assert(rows.length === 1 && rows[0].title === 'Post 42: deterministic fixture row',
+      'window.swarm: SQL over a bzz:// URL returns the right row');
+    assert(db.transport === 'window.swarm' &&
+      swarm.calls.length > 0 && swarm.calls.every((m) => m === 'swarm_readChunk'),
+      `window.swarm: every read is swarm_readChunk, none HTTP (${swarm.calls.length} calls)`);
+    await db.close();
+
+    const viaHttp = await open(
+      `http://gw/bzz/${fixture.manifest.root}/${fixture.manifest.path}`,
+      { swarm: null, verify: true, fetchFn: gateway(honest), moduleOptions: { wasmBinary } });
+    assert(viaHttp.transport === 'verified /chunks', 'swarm: null opts out of window.swarm');
+    await viaHttp.close();
+  } finally {
+    delete globalThis.swarm;
+  }
+
+  // the provider is not trusted either: a flipped payload byte is caught here
+  const tampered = new Map(honest);
+  const leafRef = [...tampered.keys()].find((ref) =>
+    tampered.get(ref).length === 8 + 4096 && ref !== fixture.db.ref);
+  const bad = tampered.get(leafRef).slice();
+  bad[100] ^= 0xff;
+  tampered.set(leafRef, bad);
+  const store = new VerifiedChunkStore(swarmProvider(tampered));
+  await expectVerificationError(
+    () => verifiedRead(store, fixture.db.ref, 0, fixture.db.size),
+    'window.swarm: a tampered chunk from the provider is caught');
+
+  let threw = null;
+  try {
+    await open(bzzUrl, { verify: true, swarm: null, fetchFn: noHttp });
+  } catch (e) { threw = e; }
+  assert(threw && /bzz\/<64-hex root>/.test(threw.message),
+    'a bzz:// URL without window.swarm fails loudly');
+}
+
 // ---- verified feed resolution ----------------------------------------------
 
 {
