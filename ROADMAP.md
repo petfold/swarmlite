@@ -114,9 +114,11 @@ Goal: the same lazy-page trick inside SQLite-WASM in a browser.
 live gateway, and confirmed in a real browser (Brave, 2026-07-24):
 posts load, keyword search works, the status line reports per-query
 page counts. Live demo root (republished 2026-10-20 with wa-sqlite
-1.1.2 / SQLite 3.53.0 and the window.swarm reader; it lives as long as
-batch `c931c8a5…`, about 2026-11-09 unless topped up):
-`98863bc75c1340c55d9926b21ee7f162a5498db719adbca7659e5f85655bc98e`.
+1.1.2 / SQLite 3.53.0, the window.swarm reader and the query queue; it
+lives as long as batch `c931c8a5…`, about 2026-11-09 unless topped up):
+`f54bac5b74d06e0480c297174224dc86c34e2a41042bf1828cc78d56c92c1f10`.
+Checked in Freedom (bundled Ant) typing "query", "page" and "feed" one
+key per 400 ms: each search returns its 10 posts, no errors.
 Re-measured on Bee 2.8.3 with the new engine: the same 5 reads / 20 KB
 cold and 23 pages / 92 KB per session. In Freedom Browser (its own Ant
 node, cold start) the same page reads through `window.swarm`: open plus
