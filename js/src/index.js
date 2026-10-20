@@ -21,6 +21,18 @@ export { VerificationError } from './verify.js';
 let modulePromise = null;
 let aliasCounter = 0;
 
+// wa-sqlite's Asyncify build can suspend only one call at a time, and
+// every open() shares the one module: a query that starts while another
+// waits on a page fetch reads garbage ("database disk image is
+// malformed") or traps the wasm. So every call into SQLite queues here,
+// which is what a search box firing on each keystroke needs.
+let sqliteQueue = Promise.resolve();
+function serialized(fn) {
+  const run = sqliteQueue.then(fn);
+  sqliteQueue = run.catch(() => {});
+  return run;
+}
+
 /** Freedom Browser injects window.swarm: the only route a page has to
  * the node (its local HTTP API is blocked to web content). */
 const freedomProvider = () =>
@@ -41,7 +53,10 @@ const freedomProvider = () =>
  * URL may also be 'bzz://<64-hex root>/<path>' — what a page's own
  * relative URLs resolve to there. Pass another window.swarm-style
  * provider as `swarm`, or `swarm: null` to use HTTP anyway.
- * `transport` on the result says which path was taken. */
+ * `transport` on the result says which path was taken.
+ *
+ * query() and close() calls queue and run one at a time, across all open
+ * databases; the raw `sqlite3`/`db` handles bypass that queue. */
 export async function open(url, {
   cachePages, readahead, moduleOptions, verify = false, fetchFn, swarm = freedomProvider(),
 } = {}) {
@@ -81,22 +96,26 @@ export async function open(url, {
   } else {
     vfs.registerUrl(alias, url);
   }
-  sqlite3.vfs_register(vfs, false);
-  const db = await sqlite3.open_v2(alias, SQLite.SQLITE_OPEN_READONLY, vfs.name);
+  const db = await serialized(() => {
+    sqlite3.vfs_register(vfs, false);
+    return sqlite3.open_v2(alias, SQLite.SQLITE_OPEN_READONLY, vfs.name);
+  });
 
   /** Run SQL; returns [{col: value, ...}, ...]. */
-  async function query(sql, bindings) {
-    const rows = [];
-    for await (const stmt of sqlite3.statements(db, sql)) {
-      if (bindings) sqlite3.bind_collection(stmt, bindings);
-      const cols = sqlite3.column_names(stmt);
-      while ((await sqlite3.step(stmt)) === SQLite.SQLITE_ROW) {
-        const row = {};
-        cols.forEach((c, i) => { row[c] = sqlite3.column(stmt, i); });
-        rows.push(row);
+  function query(sql, bindings) {
+    return serialized(async () => {
+      const rows = [];
+      for await (const stmt of sqlite3.statements(db, sql)) {
+        if (bindings) sqlite3.bind_collection(stmt, bindings);
+        const cols = sqlite3.column_names(stmt);
+        while ((await sqlite3.step(stmt)) === SQLite.SQLITE_ROW) {
+          const row = {};
+          cols.forEach((c, i) => { row[c] = sqlite3.column(stmt, i); });
+          rows.push(row);
+        }
       }
-    }
-    return rows;
+      return rows;
+    });
   }
 
   return {
@@ -105,7 +124,7 @@ export async function open(url, {
     // verified mode adds chunk-level counters (network = chunk bytes,
     // including intermediate tree/manifest chunks)
     stats: () => ({ ...vfs.statsFor(alias), ...(chunkStore?.stats ?? {}) }),
-    close: () => sqlite3.close(db),
+    close: () => serialized(() => sqlite3.close(db)),
     sqlite3,
     db,
     vfs,

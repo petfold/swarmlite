@@ -58,11 +58,35 @@ async function search(word) {
   reportDelta(`search “${escapeHtml(word)}”`, t0);
 }
 
+// One query at a time, newest input wins: through window.swarm a search
+// takes seconds, and terms typed past while it runs aren't worth their
+// reads (Freedom budgets them per origin). Failures show, not vanish.
 let timer;
+let busy = false;
+let next = null; // newest term still to run; '' = latest posts
+
+async function drain() {
+  busy = true;
+  while (next !== null) {
+    const q = next;
+    next = null;
+    try {
+      await (q ? search(q) : latest());
+      $('err').textContent = '';
+    } catch (e) {
+      $('err').textContent = `query failed: ${e?.message ?? e}`;
+    }
+  }
+  busy = false;
+}
+
 $('search').addEventListener('input', (e) => {
   clearTimeout(timer);
   const q = e.target.value.trim();
-  timer = setTimeout(() => (q ? search(q) : latest()), 250);
+  timer = setTimeout(() => {
+    next = q;
+    if (!busy) drain();
+  }, 250);
 });
 
 try {
@@ -75,6 +99,8 @@ try {
 } catch (e) {
   $('err').textContent =
     `failed to open the database: ${e}\n` +
-    `(this page needs to be served by a gateway with HTTP Range support)`;
+    (globalThis.swarm?.isFreedomBrowser
+      ? '(read through window.swarm: is the Swarm node running?)'
+      : '(this page needs to be served by a gateway with HTTP Range support)');
   throw e;
 }

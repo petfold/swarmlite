@@ -220,6 +220,28 @@ function swarmProvider(chunks, { delayMs = 0 } = {}) {
     await db.close();
   }
 
+  // overlapping calls (the demo's search box, typing while a slow query
+  // runs) must queue: the Asyncify build can only suspend one at a time
+  {
+    const slow = swarmProvider(honest, { delayMs: 5 });
+    const [a, b] = await Promise.all([
+      open(bzzUrl, { swarm: slow, fetchFn: noHttp, moduleOptions: { wasmBinary } }),
+      open(bzzUrl, { swarm: slow, fetchFn: noHttp, moduleOptions: { wasmBinary } }),
+    ]);
+    const results = await Promise.allSettled([
+      a.query('SELECT title FROM posts WHERE id = 42'),
+      a.query('SELECT title FROM posts WHERE id = 7'),
+      b.query('SELECT count(*) AS n FROM posts'),
+    ]);
+    const [r42, r7, rn] = results.map((r) => r.value);
+    assert(results.every((r) => r.status === 'fulfilled') &&
+      r42[0].title === 'Post 42: deterministic fixture row' &&
+      /^Post 7: /.test(r7[0].title) && rn[0].n > 0,
+      'overlapping opens and queries all succeed ' +
+      `(${results.map((r) => r.status === 'fulfilled' ? 'ok' : r.reason.message).join(', ')})`);
+    await Promise.all([a.close(), b.close()]);
+  }
+
   // the provider is not trusted either: a flipped payload byte is caught here
   const tampered = new Map(honest);
   const leafRef = [...tampered.keys()].find((ref) =>

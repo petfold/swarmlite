@@ -27,6 +27,17 @@ are summarised from their commits.
   option (default 0) widens a page miss into its neighbours, trading
   extra reads for fewer round trips.
 
+### Fixed
+
+- **npm package: overlapping queries.** A query started while another was
+  waiting on a page read (a search box firing on each keystroke, say) made
+  SQLite read the wrong pages: "database disk image is malformed", or a
+  crash inside wasm. wa-sqlite's async build can only pause one call at a
+  time, across every open database, so `open()`, `query()` and `close()`
+  now queue. It showed up in Freedom, where a search through
+  `window.swarm` takes seconds; over HTTP the window was just narrower.
+  The demo now runs only the newest search term and shows query errors.
+
 ### Changed
 
 - **npm package:** the browser reader and the JS publisher now run SQLite
