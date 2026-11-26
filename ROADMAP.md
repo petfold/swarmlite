@@ -116,7 +116,13 @@ posts load, keyword search works, the status line reports per-query
 page counts. Live demo root (republished 2026-10-20 with wa-sqlite
 1.1.2 / SQLite 3.53.0, the window.swarm reader and the query queue; it
 lives as long as batch `c931c8a5…`, about 2026-11-09 unless topped up):
-`f54bac5b74d06e0480c297174224dc86c34e2a41042bf1828cc78d56c92c1f10`.
+`f54bac5b74d06e0480c297174224dc86c34e2a41042bf1828cc78d56c92c1f10` (gone: its batch ran out on
+2026-11-24 and `demo.db` lost chunks). **Live demo root since
+2026-11-26:**
+`eb435c02ee13a6574873a63b517f4e7efa746ad47435bc852f4581ed7c14f5e6`, the
+same page and reader with the database built again (SQLite 3.53.1), on
+batch `dfb5a36d…`, which swarm-keep watches and tops up; `demo.db` read
+back whole through the public gateway, not yet opened in a browser.
 Checked in Freedom (bundled Ant) typing "query", "page" and "feed" one
 key per 400 ms: each search returns its 10 posts, no errors.
 Re-measured on Bee 2.8.3 with the new engine: the same 5 reads / 20 KB
